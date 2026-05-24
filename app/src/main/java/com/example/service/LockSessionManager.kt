@@ -22,13 +22,46 @@ object LockSessionManager {
     var silentCaptureEnabled: Boolean = true
     var isLockSystemAppsEnabled: Boolean = true
 
+    // --- FALLBACK PIN & ELITE MODE SECURITY ---
+    var securePinCode: String = "1234" // Default PIN
+    var isPinLockEnabled: Boolean = true
+    var isEliteModeEnabled: Boolean = false // Demands 3 layers of sequential biometric/PIN clearance
+    
+    // --- CUSTOM WRONG ATTEMPT AUDIO ALARMS ---
+    var wrongAttemptSound: String = "AI Vocal Lockdown Prompt"
+    // Audio options: "Siren Alarm Threat Loop", "AI Vocal Lockdown Prompt", "Short Sci-Fi Beep Error", "Retro Arcade Buzzer", "Dramatic Nuclear Alert", "High-Frequency Sonic Sweep"
+
+    // --- STEALTH launcher mask ---
+    var appDisguiseIcon: String = "Default Shield"
+    var appDisguiseName: String = "SecureUnlock Pro"
+    // "Default Shield", "Simple Calculator", "Weather Forecast", "Compass Tool", "Secure Notepad", "Local Files"
+
+    // --- CLONED SECURE APPS LIST ---
+    private val clonedAppsList = java.util.Collections.synchronizedSet(mutableSetOf<String>(
+        "com.whatsapp.cloned|WhatsApp Dual",
+        "com.facebook.katana.cloned|Facebook Dual"
+    ))
+
     // Customizable burglar alarm properties
     var customAlarmText: String = "Thief! Thief! Unauthorized access attempt detected!"
     var enableVoiceAlarm: Boolean = true
     var wallpaperPreset: String = "Starry Cyber Mesh"
+    var customGalleryWallpaperUri: String = "" // For gallery selected photos
 
     fun setLockingPackage(packageName: String?) {
         _currentlyLockingPackage.value = packageName
+    }
+
+    fun getClonedApps(): List<String> {
+        return clonedAppsList.toList()
+    }
+
+    fun addClonedApp(packageName: String, appName: String) {
+        clonedAppsList.add("$packageName|$appName")
+    }
+
+    fun removeClonedApp(packageName: String) {
+        clonedAppsList.remove(packageName)
     }
 
     fun isAppUnlocked(packageName: String): Boolean {

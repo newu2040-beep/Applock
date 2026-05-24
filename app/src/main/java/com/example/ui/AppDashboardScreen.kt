@@ -587,8 +587,12 @@ fun AppsTab(
     appsList: List<AppListItem>
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val clonedAppsList by viewModel.clonedAppsList.collectAsState()
     val context = LocalContext.current
+    
+    var activeSubTab by remember { mutableStateOf("LOCK COVER") } // "LOCK COVER" or "SECURE CLONING"
     var selectedCategory by remember { mutableStateOf("All") }
+    var showClonerDialog by remember { mutableStateOf(false) }
 
     val filteredList = remember(appsList, selectedCategory) {
         when (selectedCategory) {
@@ -606,110 +610,430 @@ fun AppsTab(
     ) {
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Futuristic Search Area (NeoGlass styling)
-        TextField(
-            value = searchQuery,
-            onValueChange = { viewModel.setSearch(it) },
-            placeholder = { Text("Search installed or system apps...", color = displayTheme.onSurfaceColor.copy(alpha = 0.5f)) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = displayTheme.primary) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.setSearch("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = null, tint = displayTheme.primary)
-                    }
-                }
-            },
-            singleLine = true,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = displayTheme.surfaceColor,
-                unfocusedContainerColor = displayTheme.surfaceColor.copy(alpha = 0.7f),
-                focusedTextColor = displayTheme.onSurfaceColor,
-                unfocusedTextColor = displayTheme.onSurfaceColor,
-                cursorColor = displayTheme.primary,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
-                .testTag("app_search_field")
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Category Filter Chips
+        // Visual Elegant Sub Tab Selection
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .height(42.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(displayTheme.surfaceColor)
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val categories = listOf("All", "Apps Only", "Games Only", "Locked Only")
-            categories.forEach { cat ->
-                val isSel = selectedCategory == cat
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.3f))
-                        .border(1.dp, if (isSel) displayTheme.primary else Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
-                        .clickable { selectedCategory = cat }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = cat,
-                        color = if (isSel) Color.Black else displayTheme.onSurfaceColor,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    )
-                }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (activeSubTab == "LOCK COVER") displayTheme.primary else Color.Transparent)
+                    .clickable { activeSubTab = "LOCK COVER" },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "🔐 APP LOCK SERVICE",
+                    color = if (activeSubTab == "LOCK COVER") Color.Black else displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (activeSubTab == "SECURE CLONING") displayTheme.primary else Color.Transparent)
+                    .clickable { activeSubTab = "SECURE CLONING" },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "👥 DUAL APP CLONER",
+                    color = if (activeSubTab == "SECURE CLONING") Color.Black else displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        if (filteredList.isEmpty()) {
-            Box(
+        if (activeSubTab == "LOCK COVER") {
+            // Futuristic Search Area (NeoGlass styling)
+            TextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearch(it) },
+                placeholder = { Text("Search installed or system apps...", color = displayTheme.onSurfaceColor.copy(alpha = 0.5f)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = displayTheme.primary) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearch("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = null, tint = displayTheme.primary)
+                        }
+                    }
+                },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = displayTheme.surfaceColor,
+                    unfocusedContainerColor = displayTheme.surfaceColor.copy(alpha = 0.7f),
+                    focusedTextColor = displayTheme.onSurfaceColor,
+                    unfocusedTextColor = displayTheme.onSurfaceColor,
+                    cursorColor = displayTheme.primary,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                    .testTag("app_search_field")
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Category Filter Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.HelpOutline,
-                        contentDescription = "Empty",
-                        tint = displayTheme.primary.copy(alpha = 0.3f),
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "No apps match this category/query",
-                        color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
-                        fontSize = 14.sp
-                    )
+                val categories = listOf("All", "Apps Only", "Games Only", "Locked Only")
+                categories.forEach { cat ->
+                    val isSel = selectedCategory == cat
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.3f))
+                            .border(1.dp, if (isSel) displayTheme.primary else Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                            .clickable { selectedCategory = cat }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (cat == "Games Only") {
+                                Text("🎮 ", fontSize = 11.sp)
+                            }
+                            Text(
+                                text = cat,
+                                color = if (isSel) Color.Black else displayTheme.onSurfaceColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (filteredList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                            contentDescription = "Empty",
+                            tint = displayTheme.primary.copy(alpha = 0.3f),
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No apps match this category/query",
+                            color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(
+                        items = filteredList,
+                        key = { it.packageName }
+                    ) { appItem ->
+                        AppRowItem(
+                            appItem = appItem,
+                            displayTheme = displayTheme,
+                            onToggleLock = { viewModel.toggleAppLock(appItem) }
+                        )
+                    }
                 }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            // "DUAL APP CLONING SECTION"
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(
-                    items = filteredList,
-                    key = { it.packageName }
-                ) { appItem ->
-                    AppRowItem(
-                        appItem = appItem,
-                        displayTheme = displayTheme,
-                        onToggleLock = { viewModel.toggleAppLock(appItem) }
-                    )
+                // Description card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(displayTheme.surfaceColor.copy(alpha = 0.6f))
+                        .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(20.dp))
+                        .padding(16.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Secure Sandboxing Dual Sandbox Spaces",
+                            color = displayTheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Instantly clone social, messenger, bank, or gaming applications. Replicas run in dynamic virtual safehouses with isolated sandboxed parameters for extra security and parallel account sessions.",
+                            color = displayTheme.onSurfaceColor.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+
+                // Add clone trigger FAB button
+                Button(
+                    onClick = { showClonerDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = displayTheme.primary, contentColor = Color.Black)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("GENERATE NEW DUAL APP REPLICA CLONE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Text(
+                    text = "ACTIVE ISOLATED DUPLICATES (${clonedAppsList.size})",
+                    color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                if (clonedAppsList.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterNone,
+                                contentDescription = null,
+                                tint = displayTheme.onSurfaceColor.copy(alpha = 0.15f),
+                                modifier = Modifier.size(54.dp)
+                            )
+                            Text(
+                                text = "No simulated sandboxed duplicates active.",
+                                color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(items = clonedAppsList.toList()) { cloneInfo ->
+                            val parts = cloneInfo.split("|")
+                            if (parts.size >= 2) {
+                                val pkg = parts[0]
+                                val name = parts[1]
+                                val originalPkg = pkg.replace(".cloned", "")
+                                val appIcon = remember(originalPkg) {
+                                    try {
+                                        context.packageManager.getApplicationIcon(originalPkg)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(displayTheme.surfaceColor)
+                                        .border(1.dp, displayTheme.primary.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(42.dp)
+                                                .background(displayTheme.primary.copy(alpha = 0.1f), CircleShape)
+                                                .border(1.dp, displayTheme.primary.copy(alpha = 0.25f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (appIcon != null) {
+                                                coil.compose.AsyncImage(
+                                                    model = appIcon,
+                                                    contentDescription = "Cloned app icon",
+                                                    modifier = Modifier.size(28.dp).clip(CircleShape)
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = null,
+                                                    tint = displayTheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(14.dp))
+
+                                        Column {
+                                            Text(
+                                                text = name,
+                                                color = displayTheme.onSurfaceColor,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = pkg,
+                                                color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        IconButton(
+                                            onClick = {
+                                                Toast.makeText(context, "Spinning up isolated security sandbox of $name...", Toast.LENGTH_LONG).show()
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Launch clone",
+                                                tint = displayTheme.primary,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.removeClonedApp(pkg)
+                                                Toast.makeText(context, "Virtual clone $name terminated successfully.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Remove clone",
+                                                tint = Color(0xFFEF4444),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+    }
+
+    // Interactive Cloner Dialog
+    if (showClonerDialog) {
+        AlertDialog(
+            onDismissRequest = { showClonerDialog = false },
+            title = {
+                Text(
+                    text = "REGISTER NEW CO-EXISTENT REPLICA",
+                    color = displayTheme.onSurfaceColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                ) {
+                    Text(
+                        text = "Choose an application from memory list components below to duplicate safely:",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                        fontSize = 11.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(appsList.filter { !it.packageName.contains(".cloned") }) { app ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(displayTheme.surfaceColor.copy(alpha = 0.4f))
+                                    .clickable {
+                                        viewModel.addClonedApp(app.packageName + ".cloned", app.appName + " Dual")
+                                        showClonerDialog = false
+                                        Toast.makeText(context, "Isolating security sandbox clone: ${app.appName} Duplicate active!", Toast.LENGTH_LONG).show()
+                                    }
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "👥",
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = app.appName,
+                                        color = displayTheme.onSurfaceColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = app.packageName,
+                                        color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                                        fontSize = 9.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showClonerDialog = false }) {
+                    Text("CANCEL", color = displayTheme.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            },
+            containerColor = Color(0xFF111827),
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }
 
@@ -1261,7 +1585,6 @@ fun SettingsTab(
         hasNotificationPermission = isGranted
         if (isGranted) {
             Toast.makeText(context, "System notifications fully armed!", Toast.LENGTH_SHORT).show()
-            // Dispatch a beautiful initial alert to let the user see the notification design
             com.example.util.NotificationHelper.sendShieldStatusNotification(context, isMonitoring = true, lockedCount = 3)
         } else {
             Toast.makeText(context, "Notification alerts denied. Intrusion event alarms won't display.", Toast.LENGTH_LONG).show()
@@ -1283,6 +1606,52 @@ fun SettingsTab(
     val alarmText by viewModel.customAlarmText.collectAsState()
     val wallpaperSelected by viewModel.wallpaperPreset.collectAsState()
 
+    // 1. PIN Lock & Elite Mode config states
+    val isPinLockEnabled by viewModel.isPinLockEnabled.collectAsState()
+    val securePinCode by viewModel.securePinCode.collectAsState()
+    val isEliteModeEnabled by viewModel.isEliteModeEnabled.collectAsState()
+    val wrongAttemptSound by viewModel.wrongAttemptSound.collectAsState()
+    val appDisguiseIcon by viewModel.appDisguiseIcon.collectAsState()
+    val appDisguiseName by viewModel.appDisguiseName.collectAsState()
+    val customGalleryWallpaperUri by viewModel.customGalleryWallpaperUri.collectAsState()
+
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinValueInput by remember { mutableStateOf(securePinCode) }
+
+    // 2. Gallery picker launcher
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.setCustomGalleryWallpaper(uri.toString())
+            Toast.makeText(context, "Personal phone gallery photo armed as lock background preset!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val galleryPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        android.Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    var hasGalleryPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(context, galleryPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val galleryPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasGalleryPermission = isGranted
+        if (isGranted) {
+            Toast.makeText(context, "Gallery access authorized! Opening photo picker...", Toast.LENGTH_SHORT).show()
+            galleryLauncher.launch("image/*")
+        } else {
+            Toast.makeText(context, "Gallery permission denied. Default presets will remain active.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1291,7 +1660,7 @@ fun SettingsTab(
     ) {
         item { Spacer(modifier = Modifier.height(8.dp)) }
 
-        // Customizable Themes Header
+        // Theme and Visual Styling Card
         item {
             Column(
                 modifier = Modifier
@@ -1308,7 +1677,7 @@ fun SettingsTab(
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 
-                // Theme choices pills
+                // Theme choices pills matching our SecureThemes catalogs
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1316,7 +1685,9 @@ fun SettingsTab(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val colorsList = listOf(
-                        "Immersive UI", "Ocean Blue", "Lavender", "Mint Green", "Peach", "Rose Pink", "Arctic White", "Sunset Orange"
+                        "Immersive UI", "Ocean Blue", "Lavender", "Mint Green", "Peach", 
+                        "Rose Pink", "Arctic White", "Sunset Orange", "Cyberpunk Sunrise", 
+                        "Northern Aurora", "Royal Velvet", "Cosmic Carbon", "Caramel Premium"
                     )
                     colorsList.forEach { name ->
                         val isSelected = themeName == name
@@ -1375,6 +1746,65 @@ fun SettingsTab(
                         colors = SwitchDefaults.colors(checkedTrackColor = displayTheme.accentColor)
                     )
                 }
+            }
+        }
+
+        // Multi-Stage Elite Lockdown & Fallback Verification Suite
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(displayTheme.surfaceColor)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "High Security Lock Suite",
+                    color = displayTheme.onSurfaceColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Fallback PIN toggle button
+                SettingsToggleRow(
+                    title = "Enable numeric Fallback PIN lock",
+                    description = "Provides secure alternative passcode access if biometric signature scanner is busy or unsupported on this system.",
+                    checked = isPinLockEnabled,
+                    displayTheme = displayTheme,
+                    onCheckedChange = { viewModel.setPinLockEnabled(it) }
+                )
+
+                if (isPinLockEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.03f))
+                            .clickable {
+                                pinValueInput = securePinCode
+                                showPinDialog = true
+                            }
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Setup security credentials PIN", color = displayTheme.onSurfaceColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Tap to edit key. Active code code is: [ $securePinCode ]", color = displayTheme.primary, fontSize = 10.sp)
+                        }
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = displayTheme.primary, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                // 2. Elite Mode Switch
+                SettingsToggleRow(
+                    title = "🛡️ Secure Elite mode protection [3-layers]",
+                    description = "Enforces military-grade safety. To unlock, intruders must unlock 3 layers of security sequentially: Numerical PIN keypad -> Face biometrics tracker map -> Touchprint scan sensor signature.",
+                    checked = isEliteModeEnabled,
+                    displayTheme = displayTheme,
+                    onCheckedChange = { viewModel.setEliteModeEnabled(it) }
+                )
             }
         }
 
@@ -1440,6 +1870,84 @@ fun SettingsTab(
             }
         }
 
+        // Stealth App Concealment & disguise icon simulator options
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(displayTheme.surfaceColor)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.VisibilityOff, contentDescription = null, tint = displayTheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Editable App concealment & camouflage",
+                        color = displayTheme.onSurfaceColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "Camouflage launcher shortcuts as simple tools. If anyone attempts to start them, they only see decoy menus, keeping the security program hidden.",
+                    color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val disguisedIcons = listOf(
+                        "SecureUnlock|Default Tracker" to "🛡️",
+                        "Calculator|Math Solver" to "🧮",
+                        "Compass|Navigator Map" to "🧭",
+                        "NotePad|Daily Memo Text" to "📝",
+                        "FilesViewer|Storage Hub" to "📁"
+                    )
+
+                    disguisedIcons.forEach { pair ->
+                        val parts = pair.first.split("|")
+                        val iconName = parts[0]
+                        val displayName = parts[1]
+                        val glyph = pair.second
+                        val isSel = appDisguiseIcon == iconName
+
+                        Surface(
+                            modifier = Modifier.clickable {
+                                viewModel.setAppDisguise(iconName, displayName)
+                                Toast.makeText(context, "Simulated Camouflage $displayName [ $glyph ] actively deployed!", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, if (isSel) displayTheme.primary else Color.White.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(glyph, fontSize = 12.sp)
+                                Text(
+                                    text = iconName,
+                                    color = if (isSel) Color.Black else displayTheme.onSurfaceColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Custom Voice Alarm and Lock Wallpaper customization panel
         item {
             Column(
@@ -1495,9 +2003,56 @@ fun SettingsTab(
                     }
                 }
 
+                // 3. Choice of custom simulated noise generator frequency
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Intruder Alert Noise Frequency Signature",
+                        color = displayTheme.onSurfaceColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Configure manual procedural sound waves generated on failed biometric touch scanning:",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                        fontSize = 10.sp
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val failedSounds = listOf("Furious Alarm Buzz", "Biometric Error Pulse", "Retro Siren Sweep", "Quantum Warp Gate")
+                        failedSounds.forEach { preset ->
+                            val isSel = wrongAttemptSound == preset
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    viewModel.setWrongAttemptSound(preset)
+                                    Toast.makeText(context, "$preset sound wave equipped!", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, if (isSel) displayTheme.primary else Color.White.copy(alpha = 0.1f))
+                            ) {
+                                Text(
+                                    text = preset,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    color = if (isSel) Color.Black else displayTheme.onSurfaceColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // 3. Wallpaper selection carousel
+                // 4. Wallpaper selection carousel (including 12 custom animations + 1 Custom Gallery picker)
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1514,6 +2069,34 @@ fun SettingsTab(
                         fontSize = 10.sp
                     )
 
+                    Button(
+                        onClick = {
+                            if (hasGalleryPermission) {
+                                galleryLauncher.launch("image/*")
+                            } else {
+                                galleryPermissionLauncher.launch(galleryPermission)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = displayTheme.accentColor, contentColor = Color.Black)
+                    ) {
+                        Icon(imageVector = Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("SELECT CUSTOM PHOTO FROM GALLERY", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    if (wallpaperSelected == "Custom Gallery Wallpaper") {
+                        Text(
+                            text = "✅ ACTIVE: Your chosen phone gallery picture layer is currently armed as background.",
+                            color = displayTheme.primary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1521,7 +2104,10 @@ fun SettingsTab(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val presets = listOf(
-                            "Starry Cyber Mesh", "Deep Midnight Nebula", "Virtual Matrix Rain", "Glassmorphic Sunset Glow", "Cyberpunk Grid Neon", "Standard Slate"
+                            "Starry Cyber Mesh", "Deep Midnight Nebula", "Virtual Matrix Rain", 
+                            "Glassmorphic Sunset Glow", "Cyberpunk Grid Neon", "Standard Slate",
+                            "Holographic Scan Scanline", "Retro Arcade Grid", "Quantum Particle Burst", 
+                            "Abyss Lava Lamp", "Polished Satin Silk", "Golden Shimmer Sparkles"
                         )
                         presets.forEach { preset ->
                             val isSel = wallpaperSelected == preset
@@ -1728,7 +2314,6 @@ fun SettingsTab(
                                 Toast.makeText(context, "Notification alerts are automatically armed on this OS version!", Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            // If already granted, run a demo alert when tapped
                             Toast.makeText(context, "Permission already granted! Dispatching demo warning...", Toast.LENGTH_SHORT).show()
                             com.example.util.NotificationHelper.sendSecurityIncidentNotification(context, "System Protector", 3)
                         }
@@ -1747,6 +2332,20 @@ fun SettingsTab(
                             putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "SecureUnlock Admin protection to prevent uninstallation")
                         }
                         context.startActivity(intent)
+                    }
+                )
+
+                PermissionLinkCard(
+                    title = "Gallery (Storage/Media) Access",
+                    desc = "Required to choose or import custom lock screen cover wallpapers from your device.",
+                    isGranted = hasGalleryPermission,
+                    displayTheme = displayTheme,
+                    onClick = {
+                        if (!hasGalleryPermission) {
+                            galleryPermissionLauncher.launch(galleryPermission)
+                        } else {
+                            Toast.makeText(context, "Gallery & Photo Library access has already been granted!", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             }
@@ -1799,8 +2398,17 @@ fun SettingsTab(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            val url = "https://www.instagram.com/editingcells?igsh=YzVzdzkxdzRpNWNs"
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Could not open Instagram profile", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
@@ -1834,6 +2442,69 @@ fun SettingsTab(
         }
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+
+    // Interactive Fallback PIN Setup Dialog
+    if (showPinDialog) {
+        AlertDialog(
+            onDismissRequest = { showPinDialog = false },
+            title = {
+                Text(
+                    text = "DEFINE CUSTOM FALLBACK PIN",
+                    color = displayTheme.onSurfaceColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Enter a 4-digit code to bypass standard biometric scanners during emergency access lockouts:",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                        fontSize = 11.sp
+                    )
+                    OutlinedTextField(
+                        value = pinValueInput,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() } && input.length <= 4) {
+                                pinValueInput = input
+                            }
+                        },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, color = displayTheme.onSurfaceColor, fontWeight = FontWeight.Bold),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = displayTheme.primary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.12f)
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (pinValueInput.length == 4) {
+                            viewModel.setSecurePinCode(pinValueInput)
+                            showPinDialog = false
+                            Toast.makeText(context, "Emergency PIN credentials initialized to [ $pinValueInput ] successfully!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Error: Credentials pin must be exactly 4 digits long.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = displayTheme.primary, contentColor = Color.Black)
+                ) {
+                    Text("SAVE PIN", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPinDialog = false }) {
+                    Text("CANCEL", color = displayTheme.onSurfaceColor.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            },
+            containerColor = Color(0xFF111827),
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }
 

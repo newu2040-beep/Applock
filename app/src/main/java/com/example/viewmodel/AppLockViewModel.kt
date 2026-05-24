@@ -53,6 +53,16 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
     val enableVoiceAlarm = MutableStateFlow(LockSessionManager.enableVoiceAlarm)
     val wallpaperPreset = MutableStateFlow(LockSessionManager.wallpaperPreset)
 
+    // Advanced security settings state observables
+    val isPinLockEnabled = MutableStateFlow(LockSessionManager.isPinLockEnabled)
+    val securePinCode = MutableStateFlow(LockSessionManager.securePinCode)
+    val isEliteModeEnabled = MutableStateFlow(LockSessionManager.isEliteModeEnabled)
+    val wrongAttemptSound = MutableStateFlow(LockSessionManager.wrongAttemptSound)
+    val appDisguiseIcon = MutableStateFlow(LockSessionManager.appDisguiseIcon)
+    val appDisguiseName = MutableStateFlow(LockSessionManager.appDisguiseName)
+    val clonedAppsList = MutableStateFlow(LockSessionManager.getClonedApps().toSet())
+    val customGalleryWallpaperUri = MutableStateFlow(LockSessionManager.customGalleryWallpaperUri)
+
     init {
         val dao = AppDatabase.getDatabase(application).dao
         repository = AppLockRepository(dao)
@@ -283,5 +293,48 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
                 simulatedLog.attemptCount
             )
         }
+    }
+
+    fun setPinLockEnabled(enabled: Boolean) {
+        LockSessionManager.isPinLockEnabled = enabled
+        isPinLockEnabled.value = enabled
+    }
+
+    fun setSecurePinCode(code: String) {
+        LockSessionManager.securePinCode = code
+        securePinCode.value = code
+    }
+
+    fun setEliteModeEnabled(enabled: Boolean) {
+        LockSessionManager.isEliteModeEnabled = enabled
+        isEliteModeEnabled.value = enabled
+    }
+
+    fun setWrongAttemptSound(sound: String) {
+        LockSessionManager.wrongAttemptSound = sound
+        wrongAttemptSound.value = sound
+    }
+
+    fun setAppDisguise(icon: String, name: String) {
+        LockSessionManager.appDisguiseIcon = icon
+        LockSessionManager.appDisguiseName = name
+        appDisguiseIcon.value = icon
+        appDisguiseName.value = name
+    }
+
+    fun addClonedApp(packageName: String, appName: String) {
+        LockSessionManager.addClonedApp(packageName, appName)
+        clonedAppsList.value = LockSessionManager.getClonedApps().toSet()
+    }
+
+    fun removeClonedApp(packageName: String) {
+        LockSessionManager.removeClonedApp(packageName)
+        clonedAppsList.value = LockSessionManager.getClonedApps().toSet()
+    }
+
+    fun setCustomGalleryWallpaper(uri: String) {
+        LockSessionManager.customGalleryWallpaperUri = uri
+        customGalleryWallpaperUri.value = uri
+        setWallpaperPreset("Custom Gallery Wallpaper")
     }
 }

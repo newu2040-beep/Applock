@@ -111,6 +111,18 @@ class LockOverlayActivity : FragmentActivity() {
                 modifier = Modifier
                     .fillMaxSize()
             ) {
+                // Main wallpaper: Render custom gallery phone picture if configured
+                val galleryWallpaper = LockSessionManager.customGalleryWallpaperUri
+                if (galleryWallpaper.isNotEmpty()) {
+                    coil.compose.AsyncImage(
+                        model = galleryWallpaper,
+                        contentDescription = "Custom phone gallery preset background",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        alpha = 0.5f // Blend gracefully with the back surface
+                    )
+                }
+
                 // Background preset rendering
                 if (selectedWallpaper == "Standard Slate" || selectedWallpaper.isEmpty()) {
                     Box(
@@ -119,8 +131,8 @@ class LockOverlayActivity : FragmentActivity() {
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        displayTheme.backgroundStart,
-                                        displayTheme.backgroundEnd
+                                        displayTheme.backgroundStart.copy(alpha = if (galleryWallpaper.isNotEmpty()) 0.5f else 1f),
+                                        displayTheme.backgroundEnd.copy(alpha = if (galleryWallpaper.isNotEmpty()) 0.5f else 1f)
                                     )
                                 )
                             )
@@ -151,7 +163,9 @@ class LockOverlayActivity : FragmentActivity() {
                         }
                     }
                 } else {
-                    DynamicPresetBackground(preset = selectedWallpaper, displayTheme = displayTheme)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        DynamicPresetBackground(preset = selectedWallpaper, displayTheme = displayTheme)
+                    }
                 }
 
                 if (isFakeCrashShowing) {
@@ -493,6 +507,10 @@ fun LockOverlayContent(
         }
     }
 
+    val isEliteActive = LockSessionManager.isEliteModeEnabled
+    var eliteStage by remember { mutableStateOf(1) } // 1: PIN Fallback, 2: Face Scanner, 3: Biometrics Scan
+    var activeTabMode by remember { mutableStateOf(if (LockSessionManager.isPinLockEnabled) "PIN" else "BIOMETRICS") }
+
     var isHoldingScanner by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableFloatStateOf(0f) }
     
@@ -516,7 +534,12 @@ fun LockOverlayContent(
                 delay(30)
             }
             if (holdProgress >= 1f) {
-                onVerifySuccess()
+                if (isEliteActive) {
+                    // Elite Layer 3 passed! Unlock app completely.
+                    onVerifySuccess()
+                } else {
+                    onVerifySuccess()
+                }
             }
         } else {
             // Drain progress slowly
@@ -568,15 +591,15 @@ fun LockOverlayContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // App Identity Glassmorphic Card (NeoGlass Aesthetic)
+            // Header Card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp)
+                    .height(115.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(displayTheme.surfaceColor)
                     .border(
@@ -589,7 +612,7 @@ fun LockOverlayContent(
                         ),
                         shape = RoundedCornerShape(24.dp)
                     )
-                    .padding(24.dp)
+                    .padding(16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -597,7 +620,7 @@ fun LockOverlayContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(60.dp)
+                            .size(54.dp)
                             .background(
                                 displayTheme.accentColor.copy(alpha = 0.2f),
                                 shape = CircleShape
@@ -609,131 +632,498 @@ fun LockOverlayContent(
                             coil.compose.AsyncImage(
                                 model = appIcon,
                                 contentDescription = "Target logo representation",
-                                modifier = Modifier.size(38.dp).clip(CircleShape)
+                                modifier = Modifier.size(34.dp).clip(CircleShape)
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Lock,
-                                contentDescription = "Locked LockedApp",
+                                contentDescription = "Locked APP",
                                 tint = displayTheme.primary,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
                     
-                    Spacer(modifier = Modifier.width(20.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
                     
                     Column {
                         Text(
                             text = appName,
                             color = displayTheme.onSurfaceColor,
-                            fontSize = 20.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Fingerprint / Face required to open",
-                            color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
-                            fontSize = 12.sp
+                            text = if (isEliteActive) {
+                                when (eliteStage) {
+                                    1 -> "🛡️ Elite Mode [Layer 1/3] - Enter PIN"
+                                    2 -> "🧬 Elite Mode [Layer 2/3] - Face Unlocking"
+                                    else -> "🌸 Elite Mode [Layer 3/3] - Fingerprint Scan"
+                                }
+                            } else {
+                                "Secure Fallback Access Active"
+                            },
+                            color = displayTheme.accentColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
 
-            // Central Biometric Scanner with animated wavy waves
+            // Key Interface: Stage, Numpad Keypad, or Biometric Screen
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isEliteActive) {
+                    when (eliteStage) {
+                        1 -> {
+                            PinKeypadView(
+                                correctPin = LockSessionManager.securePinCode,
+                                onSuccess = {
+                                    eliteStage = 2
+                                    Toast.makeText(context, "PIN verified! Proceeding to face recognition standard...", Toast.LENGTH_SHORT).show()
+                                },
+                                onFailure = {
+                                    onVerifyFailed()
+                                },
+                                displayTheme = displayTheme
+                            )
+                        }
+                        2 -> {
+                            FaceScanView(
+                                onScanDone = {
+                                    eliteStage = 3
+                                    Toast.makeText(context, "Face signature mapped! Approving final biometric thumb signature...", Toast.LENGTH_SHORT).show()
+                                },
+                                displayTheme = displayTheme
+                            )
+                        }
+                        else -> {
+                            BiometricScannerView(
+                                isHoldingScanner = isHoldingScanner,
+                                holdProgress = holdProgress,
+                                pulseScale = pulseScale,
+                                displayTheme = displayTheme,
+                                onRequestBiometricPrompt = onRequestBiometricPrompt,
+                                onScannerPressChange = { isHoldingScanner = it }
+                            )
+                        }
+                    }
+                } else {
+                    // Regular Mode allows toggling between Keyboard keypad or Fingerprint scan fallback
+                    if (activeTabMode == "PIN") {
+                        PinKeypadView(
+                            correctPin = LockSessionManager.securePinCode,
+                            onSuccess = {
+                                onVerifySuccess()
+                            },
+                            onFailure = {
+                                onVerifyFailed()
+                            },
+                            displayTheme = displayTheme
+                        )
+                    } else {
+                        BiometricScannerView(
+                            isHoldingScanner = isHoldingScanner,
+                            holdProgress = holdProgress,
+                            pulseScale = pulseScale,
+                            displayTheme = displayTheme,
+                            onRequestBiometricPrompt = onRequestBiometricPrompt,
+                            onScannerPressChange = { isHoldingScanner = it }
+                        )
+                    }
+                }
+            }
+
+            // Controls & Toggle Buttons Room
             Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                if (!isEliteActive) {
+                    // Quick Selector Tabs
+                    Row(
+                        modifier = Modifier
+                            .width(220.dp)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(displayTheme.surfaceColor)
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Button(
+                            onClick = { activeTabMode = "BIOMETRICS" },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (activeTabMode == "BIOMETRICS") displayTheme.primary else Color.Transparent,
+                                contentColor = if (activeTabMode == "BIOMETRICS") Color.Black else displayTheme.onSurfaceColor.copy(alpha = 0.5f)
+                            ),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("BIOMETRIC", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { activeTabMode = "PIN" },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (activeTabMode == "PIN") displayTheme.primary else Color.Transparent,
+                                contentColor = if (activeTabMode == "PIN") Color.Black else displayTheme.onSurfaceColor.copy(alpha = 0.5f)
+                            ),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("🔑 PIN CODE", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    // Reset steps link for debug
+                    Text(
+                        text = "Layer stage verification prevents system breaches.",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.4f),
+                        fontSize = 10.sp
+                    )
+                }
+
+                // Failed simulation helper
+                OutlinedButton(
+                    onClick = { onVerifyFailed() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp),
+                    border = BorderStroke(1.dp, displayTheme.primary.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = "SIMULATE KEY DECOY EXPLOIT WARNING",
+                        color = displayTheme.primary.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PinKeypadView(
+    correctPin: String,
+    onSuccess: () -> Unit,
+    onFailure: () -> Unit,
+    displayTheme: com.example.ui.theme.AppThemeColors,
+    modifier: Modifier = Modifier
+) {
+    var pin by remember { mutableStateOf("") }
+    var showFlashError by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showFlashError) {
+        if (showFlashError) {
+            delay(800)
+            showFlashError = false
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = "ENTER SECURING CREDENTIALS",
+            color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        // Bullet dots
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            for (i in 1..4) {
+                val isActive = pin.length >= i
+                val dotColor = if (showFlashError) Color(0xFFEF4444) else if (isActive) displayTheme.accentColor else displayTheme.onSurfaceColor.copy(alpha = 0.15f)
+                val scale = if (isActive) 1.25f else 1.0f
                 Box(
                     modifier = Modifier
-                        .size(220.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Loop waves in Canvas matching NeoGlass
-                    WavyBackgroundPulse(
-                        scale = pulseScale,
-                        color = displayTheme.accentColor,
-                        isHolding = isHoldingScanner,
-                        holdProgress = holdProgress
-                    )
-
-                    // Floating Glass Fingerprint Button
-                    Box(
-                        modifier = Modifier
-                            .size(90.dp)
-                            .clip(CircleShape)
-                            .background(
-                                displayTheme.surfaceColor.copy(
-                                    alpha = if (isHoldingScanner) 0.6f else 0.4f
-                                )
-                            )
-                            .border(
-                                width = 1.5.dp,
-                                brush = Brush.radialGradient(
-                                    listOf(
-                                        displayTheme.primary.copy(alpha = 0.6f),
-                                        displayTheme.secondary.copy(alpha = 0.2f)
-                                    )
-                                ),
-                                shape = CircleShape
-                            )
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onPress = {
-                                        isHoldingScanner = true
-                                        try {
-                                            awaitRelease()
-                                        } finally {
-                                            isHoldingScanner = false
-                                        }
-                                    },
-                                    onTap = {
-                                        onRequestBiometricPrompt()
-                                    }
-                                )
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fingerprint,
-                            contentDescription = "Fingerprint scan",
-                            tint = if (isHoldingScanner) displayTheme.accentColor else displayTheme.primary,
-                            modifier = Modifier
-                                .size(46.dp)
-                                .scale(if (isHoldingScanner) 1.15f else 1.0f)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Text(
-                    text = if (isHoldingScanner) "Scanning biometric session..." else "Touch and hold to scan or tap to open prompt",
-                    color = displayTheme.onSurfaceColor.copy(alpha = 0.8f),
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            // Outlined Trigger Button
-            OutlinedButton(
-                onClick = { onVerifyFailed() }, // simulate failed trigger
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                border = BorderStroke(1.dp, displayTheme.primary.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "SIMULATE FAILED LOCK ATTEMPT",
-                    color = displayTheme.primary.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                        .size(14.dp)
+                        .scale(scale)
+                        .background(dotColor, shape = CircleShape)
+                        .border(1.dp, if (isActive) Color.White.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Grid 3x4
+        val buttonsList = listOf(
+            listOf("1", "2", "3"),
+            listOf("4", "5", "6"),
+            listOf("7", "8", "9"),
+            listOf("C", "0", "◀")
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.widthIn(max = 240.dp)
+        ) {
+            for (row in buttonsList) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    for (char in row) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1.4f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(displayTheme.surfaceColor.copy(alpha = 0.35f))
+                                .clickable {
+                                    when (char) {
+                                        "C" -> pin = ""
+                                        "◀" -> if (pin.isNotEmpty()) pin = pin.dropLast(1)
+                                        else -> {
+                                            if (pin.length < 4) {
+                                                pin += char
+                                                if (pin.length == 4) {
+                                                    if (pin == correctPin) {
+                                                        onSuccess()
+                                                        pin = ""
+                                                    } else {
+                                                        showFlashError = true
+                                                        onFailure()
+                                                        pin = ""
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .border(1.dp, displayTheme.primary.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                                .padding(4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = char,
+                                color = displayTheme.onSurfaceColor,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FaceScanView(
+    onScanDone: () -> Unit,
+    displayTheme: com.example.ui.theme.AppThemeColors,
+    modifier: Modifier = Modifier
+) {
+    var isScanning by remember { mutableStateOf(false) }
+    var scanProgress by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(isScanning) {
+        if (isScanning) {
+            val startTime = System.currentTimeMillis()
+            while (isScanning && scanProgress < 1f) {
+                val elapsed = System.currentTimeMillis() - startTime
+                scanProgress = (elapsed / 1500f).coerceAtMost(1f)
+                delay(30)
+            }
+            if (scanProgress >= 1f) {
+                onScanDone()
+            }
+        } else {
+            scanProgress = 0f
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = "LAYER 2: FACIAL TELEMETRY MATRIX",
+            color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        Box(
+            modifier = Modifier
+                .size(175.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(displayTheme.surfaceColor)
+                .border(1.5.dp, displayTheme.accentColor.copy(alpha = 0.4f), RoundedCornerShape(32.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val scopeSize = 130.dp.toPx()
+                val topX = (size.width - scopeSize) / 2
+                val topY = (size.height - scopeSize) / 2
+                
+                val len = 15.dp.toPx()
+                val color = displayTheme.primary
+                
+                // Corners
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX, topY), androidx.compose.ui.geometry.Offset(topX + len, topY), strokeWidth = 3.dp.toPx())
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX, topY), androidx.compose.ui.geometry.Offset(topX, topY + len), strokeWidth = 3.dp.toPx())
+                
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX + scopeSize, topY), androidx.compose.ui.geometry.Offset(topX + scopeSize - len, topY), strokeWidth = 3.dp.toPx())
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX + scopeSize, topY), androidx.compose.ui.geometry.Offset(topX + scopeSize, topY + len), strokeWidth = 3.dp.toPx())
+                
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX, topY + scopeSize), androidx.compose.ui.geometry.Offset(topX + len, topY + scopeSize), strokeWidth = 3.dp.toPx())
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX, topY + scopeSize), androidx.compose.ui.geometry.Offset(topX, topY + scopeSize - len), strokeWidth = 3.dp.toPx())
+                
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX + scopeSize, topY + scopeSize), androidx.compose.ui.geometry.Offset(topX + scopeSize - len, topY + scopeSize), strokeWidth = 3.dp.toPx())
+                drawLine(color, androidx.compose.ui.geometry.Offset(topX + scopeSize, topY + scopeSize), androidx.compose.ui.geometry.Offset(topX + scopeSize, topY + scopeSize - len), strokeWidth = 3.dp.toPx())
+
+                // Face contours
+                drawOval(
+                    color = displayTheme.accentColor.copy(alpha = if (isScanning) 0.5f else 0.2f),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.3f, size.height * 0.22f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.4f, size.height * 0.55f),
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+
+                if (isScanning) {
+                    val scanY = topY + scopeSize * scanProgress
+                    drawLine(
+                        color = displayTheme.accentColor.copy(alpha = 0.8f),
+                        start = androidx.compose.ui.geometry.Offset(topX, scanY),
+                        end = androidx.compose.ui.geometry.Offset(topX + scopeSize, scanY),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+            }
+
+            if (!isScanning) {
+                Button(
+                    onClick = { isScanning = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = displayTheme.primary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("START FACE SCAN", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Text(
+                    text = "MAPPING... ${(scanProgress * 100).toInt()}%",
+                    color = displayTheme.accentColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        Text(
+            text = "Ensure face contours center in focus box.",
+            color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+fun BiometricScannerView(
+    isHoldingScanner: Boolean,
+    holdProgress: Float,
+    pulseScale: Float,
+    displayTheme: com.example.ui.theme.AppThemeColors,
+    onRequestBiometricPrompt: () -> Unit,
+    onScannerPressChange: (Boolean) -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier.size(190.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            WavyBackgroundPulse(
+                scale = pulseScale,
+                color = displayTheme.accentColor,
+                isHolding = isHoldingScanner,
+                holdProgress = holdProgress
+            )
+
+            // Touch sensor
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(
+                        displayTheme.surfaceColor.copy(
+                            alpha = if (isHoldingScanner) 0.61f else 0.41f
+                        )
+                    )
+                    .border(
+                        width = 1.5.dp,
+                        brush = Brush.radialGradient(
+                            listOf(
+                                displayTheme.primary.copy(alpha = 0.6f),
+                                displayTheme.secondary.copy(alpha = 0.2f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                onScannerPressChange(true)
+                                try {
+                                    awaitRelease()
+                                } finally {
+                                    onScannerPressChange(false)
+                                }
+                            },
+                            onTap = {
+                                onRequestBiometricPrompt()
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Fingerprint,
+                    contentDescription = "Fingerprint scan",
+                    tint = if (isHoldingScanner) displayTheme.accentColor else displayTheme.primary,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .scale(if (isHoldingScanner) 1.15f else 1.0f)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = if (isHoldingScanner) "Scanning biometric fingerprint..." else "Touch & Hold to scan signature or Tap for prompt",
+            color = displayTheme.onSurfaceColor.copy(alpha = 0.8f),
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1071,6 +1461,250 @@ fun DynamicPresetBackground(
                         }
                         currentY += step
                         step *= 1.25f
+                    }
+                }
+            }
+            "Holographic Scan Scanline" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "holograms")
+                val scanLineY by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(3500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "scanline"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF020712))
+                    val gridWidth = 40.dp.toPx()
+                    for (x in 0..size.width.toInt() step gridWidth.toInt()) {
+                        drawLine(displayTheme.primary.copy(alpha = 0.04f), androidx.compose.ui.geometry.Offset(x.toFloat(), 0f), androidx.compose.ui.geometry.Offset(x.toFloat(), size.height))
+                    }
+                    for (y in 0..size.height.toInt() step gridWidth.toInt()) {
+                        drawLine(displayTheme.primary.copy(alpha = 0.04f), androidx.compose.ui.geometry.Offset(0f, y.toFloat()), androidx.compose.ui.geometry.Offset(size.width, y.toFloat()))
+                    }
+                    // Glowing biometric sonar concentric lines
+                    drawCircle(displayTheme.accentColor.copy(alpha = 0.07f), radius = 100.dp.toPx(), center = center, style = Stroke(width = 2.dp.toPx()))
+                    drawCircle(displayTheme.accentColor.copy(alpha = 0.12f), radius = 140.dp.toPx(), center = center, style = Stroke(width = 1.dp.toPx()))
+                    
+                    val lineY = scanLineY * size.height
+                    drawLine(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, displayTheme.primary.copy(alpha = 0.35f), Color.Transparent),
+                            startY = lineY - 15.dp.toPx(),
+                            endY = lineY + 15.dp.toPx()
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(0f, lineY),
+                        end = androidx.compose.ui.geometry.Offset(size.width, lineY),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+            }
+            "Retro Arcade Grid" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "retro")
+                val roadProgress by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "gridRoad"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF0F0014))
+                    val gridCenterY = size.height * 0.45f
+                    
+                    // Outlined neon retro sun
+                    drawCircle(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color(0xFFFF3366), Color(0xFFFF9933)),
+                            startY = gridCenterY - 110.dp.toPx(),
+                            endY = gridCenterY
+                        ),
+                        radius = 90.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(size.width / 2f, gridCenterY)
+                    )
+                    
+                    // perspective horizon grids
+                    val gridLines = 18
+                    for (i in 0..gridLines) {
+                        val startX = (i * size.width) / gridLines
+                        drawLine(
+                            color = Color(0xFFFF2A85).copy(alpha = 0.3f),
+                            start = androidx.compose.ui.geometry.Offset(startX, size.height),
+                            end = androidx.compose.ui.geometry.Offset(size.width / 2f, gridCenterY),
+                            strokeWidth = 1.5.dp.toPx()
+                        )
+                    }
+
+                    // Dynamic scaling horizontal bars
+                    var multiplierY = 0f
+                    while (multiplierY < 1f) {
+                        val adjustedVal = (multiplierY + roadProgress * 0.1f) % 1f
+                        val actualY = gridCenterY + (size.height - gridCenterY) * java.lang.Math.pow(adjustedVal.toDouble(), 2.5).toFloat()
+                        drawLine(
+                            color = Color(0xFF00FFFF).copy(alpha = (adjustedVal * 0.4f).toFloat()),
+                            start = androidx.compose.ui.geometry.Offset(0f, actualY.toFloat()),
+                            end = androidx.compose.ui.geometry.Offset(size.width, actualY.toFloat()),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        multiplierY += 0.12f
+                    }
+                }
+            }
+            "Quantum Particle Burst" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "quantum")
+                val rotProgress by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(animation = tween(18000, easing = LinearEasing)),
+                    label = "rot"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF040608))
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(displayTheme.primary.copy(alpha = 0.15f), Color.Transparent),
+                            radius = size.width * 0.8f
+                        ),
+                        radius = size.width * 0.8f,
+                        center = center
+                    )
+                    
+                    // Draw a orbital ring system of atomic nodes
+                    val angleRad = Math.toRadians(rotProgress.toDouble()).toFloat()
+                    val numNodes = 7
+                    for (i in 0 until numNodes) {
+                        val offsetAngle = angleRad + (2 * Math.PI.toFloat() * i / numNodes)
+                        val radiusFactor = 120.dp.toPx() + 20.dp.toPx() * kotlin.math.sin(offsetAngle * 2.5f)
+                        val nodeX = center.x + radiusFactor * kotlin.math.cos(offsetAngle)
+                        val nodeY = center.y + radiusFactor * kotlin.math.sin(offsetAngle)
+                        
+                        drawCircle(displayTheme.primary, radius = 4.dp.toPx(), center = androidx.compose.ui.geometry.Offset(nodeX, nodeY))
+                        drawCircle(displayTheme.primary.copy(alpha = 0.2f), radius = 12.dp.toPx(), center = androidx.compose.ui.geometry.Offset(nodeX, nodeY))
+                        drawLine(
+                            color = displayTheme.primary.copy(alpha = 0.1f),
+                            start = center,
+                            end = androidx.compose.ui.geometry.Offset(nodeX, nodeY),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+                    drawCircle(displayTheme.accentColor.copy(alpha = 0.25f), radius = 10.dp.toPx(), center = center)
+                }
+            }
+            "Abyss Lava Lamp" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "lava")
+                val animValue by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(animation = tween(8000, easing = LinearEasing)),
+                    label = "sweepAnim"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF08020E))
+                    val blob1X = center.x + kotlin.math.cos(animValue) * 80.dp.toPx()
+                    val blob1Y = center.y + kotlin.math.sin(animValue * 1.5f) * 140.dp.toPx()
+                    val blob2X = center.x - kotlin.math.sin(animValue) * 90.dp.toPx()
+                    val blob2Y = center.y - kotlin.math.cos(animValue * 1.2f) * 160.dp.toPx()
+
+                    drawCircle(
+                        brush = Brush.radialGradient(colors = listOf(Color(0xFF6366F1).copy(alpha = 0.35f), Color.Transparent), radius = 160.dp.toPx()),
+                        radius = 160.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(blob1X, blob1Y)
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(colors = listOf(Color(0xFFEC4899).copy(alpha = 0.32f), Color.Transparent), radius = 170.dp.toPx()),
+                        radius = 170.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(blob2X, blob2Y)
+                    )
+                }
+            }
+            "Polished Satin Silk" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "silk")
+                val slide by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(animation = tween(7000, easing = LinearEasing)),
+                    label = "slideAnim"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF060910))
+                    
+                    // Generate elegant curving sine curtains
+                    val path1 = Path()
+                    val path2 = Path()
+                    path1.moveTo(0f, size.height * 0.4f)
+                    path2.moveTo(0f, size.height * 0.6f)
+                    val stepsCount = 50
+                    val stepWidth = size.width / stepsCount
+
+                    for (i in 0..stepsCount) {
+                        val currentX = i * stepWidth
+                        val progress = i.toFloat() / stepsCount
+                        val heightY1 = size.height * 0.45f + kotlin.math.sin(slide + progress * 5f) * 60.dp.toPx()
+                        val heightY2 = size.height * 0.65f + kotlin.math.cos(slide - progress * 4f) * 70.dp.toPx()
+                        path1.lineTo(currentX, heightY1)
+                        path2.lineTo(currentX, heightY2)
+                    }
+                    path1.lineTo(size.width, size.height)
+                    path1.lineTo(0f, size.height)
+                    path1.close()
+                    
+                    path2.lineTo(size.width, size.height)
+                    path2.lineTo(0f, size.height)
+                    path2.close()
+
+                    drawPath(
+                        path = path2,
+                        brush = Brush.verticalGradient(listOf(displayTheme.secondary.copy(alpha = 0.15f), Color.Transparent))
+                    )
+                    drawPath(
+                        path = path1,
+                        brush = Brush.verticalGradient(listOf(displayTheme.primary.copy(alpha = 0.12f), Color.Transparent))
+                    )
+                }
+            }
+            "Golden Shimmer Sparkles" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "gold")
+                val shimmer by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(animation = tween(3800, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+                    label = "glowIntensity"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF0D0A05))
+                    
+                    drawCircle(
+                        brush = Brush.radialGradient(colors = listOf(Color(0x19F59E0B), Color.Transparent), radius = size.width * 0.9f),
+                        radius = size.width * 0.9f,
+                        center = center
+                    )
+                    
+                    // Sparkles coordinates
+                    val sparkles = listOf(
+                        androidx.compose.ui.geometry.Offset(0.15f, 0.22f),
+                        androidx.compose.ui.geometry.Offset(0.35f, 0.15f),
+                        androidx.compose.ui.geometry.Offset(0.75f, 0.28f),
+                        androidx.compose.ui.geometry.Offset(0.22f, 0.65f),
+                        androidx.compose.ui.geometry.Offset(0.85f, 0.58f),
+                        androidx.compose.ui.geometry.Offset(0.55f, 0.82f),
+                        androidx.compose.ui.geometry.Offset(0.42f, 0.38f),
+                        androidx.compose.ui.geometry.Offset(0.68f, 0.72f)
+                    )
+
+                    sparkles.forEachIndexed { idx, point ->
+                        val localShimmer = (shimmer + (idx * 0.15f)) % 1f
+                        val floatX = point.x * size.width
+                        val floatY = point.y * size.height + (kotlin.math.sin(shimmer * Math.PI.toFloat() + idx) * 12.dp.toPx())
+                        val sparkleRadius = (3.dp.toPx() + 5.dp.toPx() * localShimmer)
+                        drawCircle(
+                            color = Color(0xFFFBBF24).copy(alpha = localShimmer * 0.6f),
+                            radius = sparkleRadius,
+                            center = androidx.compose.ui.geometry.Offset(floatX.toFloat(), floatY.toFloat())
+                        )
                     }
                 }
             }
