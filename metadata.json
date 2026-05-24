@@ -1,0 +1,6 @@
+{
+  "name": "SecureUnlock",
+  "description": "Native ultra-modern app lock application with biometric unlock, intruder capture, and offline protection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

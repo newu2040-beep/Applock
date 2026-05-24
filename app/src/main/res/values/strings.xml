@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">SecureUnlock</string>
+    <string name="accessibility_desc">Monitors application windows to protect selected packages.</string>
+</resources>
