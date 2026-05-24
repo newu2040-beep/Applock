@@ -678,46 +678,65 @@ fun AppRowItem(
     displayTheme: com.example.ui.theme.AppThemeColors,
     onToggleLock: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(displayTheme.surfaceColor)
-            .border(
-                width = 1.dp,
-                color = if (appItem.isLocked) displayTheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Glass style package badge
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .background(
-                        if (appItem.isLocked) displayTheme.primary.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-                        CircleShape
-                    )
-                    .border(
-                        1.dp,
-                        if (appItem.isLocked) displayTheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (appItem.isSystemApp) Icons.Default.SettingsSuggest else Icons.Default.AppShortcut,
-                    contentDescription = null,
-                    tint = if (appItem.isLocked) displayTheme.primary else displayTheme.onSurfaceColor.copy(alpha = 0.8f),
-                    modifier = Modifier.size(20.dp)
-                )
+        val context = LocalContext.current
+        val appIcon = remember(appItem.packageName) {
+            try {
+                context.packageManager.getApplicationIcon(appItem.packageName)
+            } catch (e: Exception) {
+                null
             }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(displayTheme.surfaceColor)
+                .border(
+                    width = 1.dp,
+                    color = if (appItem.isLocked) displayTheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Glass style package badge with actual application icon
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            if (appItem.isLocked) displayTheme.primary.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                            CircleShape
+                        )
+                        .border(
+                            1.dp,
+                            if (appItem.isLocked) displayTheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (appIcon != null) {
+                        coil.compose.AsyncImage(
+                            model = appIcon,
+                            contentDescription = "App Logo",
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (appItem.isSystemApp) Icons.Default.SettingsSuggest else Icons.Default.AppShortcut,
+                            contentDescription = null,
+                            tint = if (appItem.isLocked) displayTheme.primary else displayTheme.onSurfaceColor.copy(alpha = 0.8f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
             Spacer(modifier = Modifier.width(16.dp))
 
@@ -917,6 +936,13 @@ fun IntruderLogCard(
         sdf.format(Date(log.timestamp))
     }
 
+    val photoFile = remember(log.photoPath) {
+        if (!log.photoPath.isNullOrEmpty()) java.io.File(log.photoPath) else null
+    }
+    val hasPhotoFile = remember(photoFile) {
+        photoFile != null && photoFile.exists() && photoFile.length() > 0
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -929,32 +955,40 @@ fun IntruderLogCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Intruder Face Silhouette Hologram drawing inside neon box
             Box(
                 modifier = Modifier
                     .size(74.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color.Black.copy(alpha = 0.3f))
-                    .border(1.dp, displayTheme.primary.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                    .border(1.dp, displayTheme.primary.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.size(54.dp)) {
-                    // Face silhouette line drawings
-                    val colorBrush = displayTheme.accentColor
-                    val faceCenter = this.center.copy(y = this.center.y - 4.dp.toPx())
-                    drawCircle(
-                        color = colorBrush.copy(alpha = 0.3f),
-                        radius = 12.dp.toPx(),
-                        center = faceCenter
+                if (hasPhotoFile && photoFile != null) {
+                    coil.compose.AsyncImage(
+                        model = photoFile,
+                        contentDescription = "Intruder Capture",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                    drawArc(
-                        color = colorBrush.copy(alpha = 0.5f),
-                        startAngle = 180f,
-                        sweepAngle = 180f,
-                        useCenter = true,
-                        size = androidx.compose.ui.geometry.Size(32.dp.toPx(), 24.dp.toPx()),
-                        topLeft = androidx.compose.ui.geometry.Offset(this.center.x - 16.dp.toPx(), this.center.y + 2.dp.toPx())
-                    )
+                } else {
+                    Canvas(modifier = Modifier.size(54.dp)) {
+                        // Face silhouette line drawings
+                        val colorBrush = displayTheme.accentColor
+                        val faceCenter = this.center.copy(y = this.center.y - 4.dp.toPx())
+                        drawCircle(
+                            color = colorBrush.copy(alpha = 0.3f),
+                            radius = 12.dp.toPx(),
+                            center = faceCenter
+                        )
+                        drawArc(
+                            color = colorBrush.copy(alpha = 0.5f),
+                            startAngle = 180f,
+                            sweepAngle = 180f,
+                            useCenter = true,
+                            size = androidx.compose.ui.geometry.Size(32.dp.toPx(), 24.dp.toPx()),
+                            topLeft = androidx.compose.ui.geometry.Offset(this.center.x - 16.dp.toPx(), this.center.y + 2.dp.toPx())
+                        )
+                    }
                 }
                 
                 // Camera Lens overlay icon
@@ -1037,6 +1071,10 @@ fun SettingsTab(
     val isFakeCrash by viewModel.isFakeCrashEnabled.collectAsState()
     val isSilentCapture by viewModel.silentCaptureEnabled.collectAsState()
     val isLockSystem by viewModel.isLockSystemAppsEnabled.collectAsState()
+
+    val voiceEnabled by viewModel.enableVoiceAlarm.collectAsState()
+    val alarmText by viewModel.customAlarmText.collectAsState()
+    val wallpaperSelected by viewModel.wallpaperPreset.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -1192,6 +1230,111 @@ fun SettingsTab(
                     displayTheme = displayTheme,
                     onCheckedChange = { viewModel.setIsLockSystemAppsEnabled(it) }
                 )
+            }
+        }
+
+        // Custom Voice Alarm and Lock Wallpaper customization panel
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(displayTheme.surfaceColor)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Custom Intruder Alarm & Wallpapers",
+                    color = displayTheme.onSurfaceColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // 1. Voice Alarm Toggle
+                SettingsToggleRow(
+                    title = "Vocal 'Thief Thief' Alarm Mode",
+                    description = "Uses Text-to-Speech system speech to loudly warn the intruder when biometric authentication fails.",
+                    checked = voiceEnabled,
+                    displayTheme = displayTheme,
+                    onCheckedChange = { viewModel.setEnableVoiceAlarm(it) }
+                )
+
+                // 2. Custom Alarm Editable phrase Textfield
+                if (voiceEnabled) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Custom verbal threat message text",
+                            color = displayTheme.onSurfaceColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        OutlinedTextField(
+                            value = alarmText,
+                            onValueChange = { viewModel.setCustomAlarmText(it) },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = displayTheme.onSurfaceColor),
+                            placeholder = { Text("E.g. thief thief, stay away from my phone!", fontSize = 13.sp, color = displayTheme.onSurfaceColor.copy(alpha = 0.4f)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = displayTheme.primary,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                                focusedLabelColor = displayTheme.primary,
+                                unfocusedLabelColor = displayTheme.onSurfaceColor.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // 3. Wallpaper selection carousel
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Real-time overlay custom backgrounds",
+                        color = displayTheme.onSurfaceColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Sets customized animated cybermatic picture layers over biometric unlock dialog popup.",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                        fontSize = 10.sp
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val presets = listOf(
+                            "Starry Cyber Mesh", "Deep Midnight Nebula", "Virtual Matrix Rain", "Glassmorphic Sunset Glow", "Cyberpunk Grid Neon", "Standard Slate"
+                        )
+                        presets.forEach { preset ->
+                            val isSel = wallpaperSelected == preset
+                            Surface(
+                                modifier = Modifier.clickable { viewModel.setWallpaperPreset(preset) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, if (isSel) displayTheme.primary else Color.White.copy(alpha = 0.1f))
+                            ) {
+                                Text(
+                                    text = preset,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    color = if (isSel) Color.Black else displayTheme.onSurfaceColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 

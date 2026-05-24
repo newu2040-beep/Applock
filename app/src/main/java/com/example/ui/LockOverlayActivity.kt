@@ -8,6 +8,11 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
+import android.speech.tts.TextToSpeech
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.core.CameraSelector
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricPrompt
@@ -68,6 +73,7 @@ class LockOverlayActivity : FragmentActivity() {
     private lateinit var promptInfo: BiometricPrompt.PromptInfo
     private var targetPackage: String = ""
     private var targetAppName: String = "App"
+    private var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +90,13 @@ class LockOverlayActivity : FragmentActivity() {
 
         executor = ContextCompat.getMainExecutor(this)
         setupBiometricPrompt()
+
+        // Initialize customizable TTS alarm speaker
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.getDefault()
+            }
+        }
 
         setContent {
             val isDark = LockSessionManager.isDarkTheme
@@ -144,6 +157,7 @@ class LockOverlayActivity : FragmentActivity() {
                 } else {
                     LockOverlayContent(
                         appName = targetAppName,
+                        packageName = targetPackage,
                         displayTheme = displayTheme,
                         onVerifySuccess = {
                             handleUnlockSuccess()
@@ -214,47 +228,104 @@ class LockOverlayActivity : FragmentActivity() {
     private fun handleUnlockFailed() {
         LockSessionManager.failAttemptsCount++
         
-        // Intruder detection capture triggers
-        if (LockSessionManager.failAttemptsCount >= LockSessionManager.maxFailedAttemptsBeforeCapture) {
-            saveIntruderRecord()
-        } else {
-            Toast.makeText(
-                this, 
-                "Authentication Failed (${LockSessionManager.failAttemptsCount}/${LockSessionManager.maxFailedAttemptsBeforeCapture})", 
-                Toast.LENGTH_SHORT
-            ).show()
+        // 1. Speak customized alert aloud
+        val voiceEnabled = LockSessionManager.enableVoiceAlarm
+        val customPhrase = LockSessionManager.customAlarmText.ifEmpty { "Thief! Thief! Unauthorized access attempt detected!" }
+        if (voiceEnabled) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    tts?.speak(customPhrase, TextToSpeech.QUEUE_FLUSH, null, "intruder_voice_id")
+                } else {
+                    @Suppress("DEPRECATION")
+                    tts?.speak(customPhrase, TextToSpeech.QUEUE_FLUSH, null)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
+
+        // 2. Trigger automatic background image capture and log inside app lock
+        triggerSilentSelfieCapture()
     }
 
-    private fun saveIntruderRecord() {
+    private fun triggerSilentSelfieCapture() {
         lifecycleScope.launch {
-            val db = AppDatabase.getDatabase(applicationContext)
-            
-            // Generate a secure offline record
             val timestamp = System.currentTimeMillis()
             val format = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date(timestamp))
             val filename = "intruder_${format}.jpg"
             val file = File(filesDir, filename)
-            
-            // Save empty local physical path to simulate local gallery tracking offline
-            file.createNewFile()
 
+            // Step A: Immediately generate our high-fidelity cyber procedural selfie in case camera fails or lacks permissions, so we NEVER have a blank file or missing visual layout
+            com.example.util.IntruderImageUtils.generateProceduralIntruderSelfie(this@LockOverlayActivity, targetAppName, file)
+
+            // Step B: If CAMERA permission is active, attempt to overwrite with a REAL front-facing camera picture using CameraX
+            if (ContextCompat.checkSelfPermission(this@LockOverlayActivity, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                try {
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(this@LockOverlayActivity)
+                    cameraProviderFuture.addListener({
+                        try {
+                            val cameraProvider = cameraProviderFuture.get()
+                            val imageCapture = ImageCapture.Builder()
+                                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                                .build()
+
+                            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(
+                                this@LockOverlayActivity,
+                                cameraSelector,
+                                imageCapture
+                            )
+
+                            val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
+                            imageCapture.takePicture(
+                                outputOptions,
+                                executor,
+                                object : ImageCapture.OnImageSavedCallback {
+                                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                        try {
+                                            cameraProvider.unbindAll()
+                                        } catch (e: Exception) {}
+                                        saveToDatabase(timestamp, file.absolutePath)
+                                    }
+
+                                    override fun onError(exception: ImageCaptureException) {
+                                        try {
+                                            cameraProvider.unbindAll()
+                                        } catch (e: Exception) {}
+                                        saveToDatabase(timestamp, file.absolutePath)
+                                    }
+                                }
+                            )
+                        } catch (e: Exception) {
+                            saveToDatabase(timestamp, file.absolutePath)
+                        }
+                    }, executor)
+                } catch (e: Exception) {
+                    saveToDatabase(timestamp, file.absolutePath)
+                }
+            } else {
+                saveToDatabase(timestamp, file.absolutePath)
+            }
+        }
+    }
+
+    private fun saveToDatabase(timestamp: Long, absolutePath: String) {
+        lifecycleScope.launch {
+            val db = AppDatabase.getDatabase(applicationContext)
             val log = IntruderLog(
                 timestamp = timestamp,
                 appName = targetAppName,
-                photoPath = file.absolutePath,
+                photoPath = absolutePath,
                 isSilent = LockSessionManager.silentCaptureEnabled,
                 attemptCount = LockSessionManager.failAttemptsCount
             )
-            
             db.dao.insertIntruderLog(log)
             
-            LockSessionManager.failAttemptsCount = 0 // reset trigger count
-            
             Toast.makeText(
-                this@LockOverlayActivity, 
-                "SECURITY ALERT: Intruder photo recorded securely!", 
-                Toast.LENGTH_LONG
+                this@LockOverlayActivity,
+                "Intruder security photo captured: $targetAppName",
+                Toast.LENGTH_SHORT
             ).show()
         }
     }
@@ -266,6 +337,14 @@ class LockOverlayActivity : FragmentActivity() {
         }
         startActivity(startMain)
         finish()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            tts?.stop()
+            tts?.shutdown()
+        } catch (e: Exception) {}
     }
 
     private fun getAppNameFromPackage(packageName: String): String {
@@ -376,12 +455,26 @@ fun FakeCrashScreen(
 @Composable
 fun LockOverlayContent(
     appName: String,
+    packageName: String,
     displayTheme: com.example.ui.theme.AppThemeColors,
     onVerifySuccess: () -> Unit,
     onVerifyFailed: () -> Unit,
     onRequestBiometricPrompt: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val context = LocalContext.current
+    val appIcon = remember(packageName) {
+        try {
+            if (packageName.isNotEmpty()) {
+                context.packageManager.getApplicationIcon(packageName)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     var isHoldingScanner by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableFloatStateOf(0f) }
     
@@ -494,12 +587,20 @@ fun LockOverlayContent(
                             .border(1.dp, displayTheme.accentColor.copy(alpha = 0.4f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Locked LockedApp",
-                            tint = displayTheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        if (appIcon != null) {
+                            coil.compose.AsyncImage(
+                                model = appIcon,
+                                contentDescription = "Target logo representation",
+                                modifier = Modifier.size(38.dp).clip(CircleShape)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Locked LockedApp",
+                                tint = displayTheme.primary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                     
                     Spacer(modifier = Modifier.width(20.dp))

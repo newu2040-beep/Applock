@@ -22,6 +22,11 @@ object LockSessionManager {
     var silentCaptureEnabled: Boolean = true
     var isLockSystemAppsEnabled: Boolean = true
 
+    // Customizable burglar alarm properties
+    var customAlarmText: String = "Thief! Thief! Unauthorized access attempt detected!"
+    var enableVoiceAlarm: Boolean = true
+    var wallpaperPreset: String = "Starry Cyber Mesh"
+
     fun setLockingPackage(packageName: String?) {
         _currentlyLockingPackage.value = packageName
     }

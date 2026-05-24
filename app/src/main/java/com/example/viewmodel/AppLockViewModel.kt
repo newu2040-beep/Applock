@@ -46,6 +46,11 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
     val isFakeCrashEnabled = MutableStateFlow(LockSessionManager.isFakeCrashEnabled)
     val silentCaptureEnabled = MutableStateFlow(LockSessionManager.silentCaptureEnabled)
     val isLockSystemAppsEnabled = MutableStateFlow(LockSessionManager.isLockSystemAppsEnabled)
+    
+    // Customizable alarm & background properties
+    val customAlarmText = MutableStateFlow(LockSessionManager.customAlarmText)
+    val enableVoiceAlarm = MutableStateFlow(LockSessionManager.enableVoiceAlarm)
+    val wallpaperPreset = MutableStateFlow(LockSessionManager.wallpaperPreset)
 
     init {
         val dao = AppDatabase.getDatabase(application).dao
@@ -221,13 +226,40 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
         isLockSystemAppsEnabled.value = enabled
     }
 
+    fun setCustomAlarmText(text: String) {
+        LockSessionManager.customAlarmText = text
+        customAlarmText.value = text
+    }
+
+    fun setEnableVoiceAlarm(enabled: Boolean) {
+        LockSessionManager.enableVoiceAlarm = enabled
+        enableVoiceAlarm.value = enabled
+    }
+
+    fun setWallpaperPreset(preset: String) {
+        LockSessionManager.wallpaperPreset = preset
+        wallpaperPreset.value = preset
+    }
+
     // Helper to simulate capture for presentation / visual checks in emulator
     fun simulateIntruderLog() {
         viewModelScope.launch {
             val randomApp = listOf("WhatsApp", "Google Photos", "Settings", "Gmail", "Instagram").random()
+            val timestamp = System.currentTimeMillis()
+            val filename = "intruder_simulated_${timestamp}.jpg"
+            val file = java.io.File(getApplication<Application>().filesDir, filename)
+            
+            // Use our high fidelity procedural photo generator
+            com.example.util.IntruderImageUtils.generateProceduralIntruderSelfie(
+                getApplication(),
+                randomApp,
+                file
+            )
+
             val simulatedLog = IntruderLog(
+                timestamp = timestamp,
                 appName = randomApp,
-                photoPath = null, // Simulated photo capture
+                photoPath = file.absolutePath,
                 isSilent = LockSessionManager.silentCaptureEnabled,
                 attemptCount = (3..5).random()
             )
