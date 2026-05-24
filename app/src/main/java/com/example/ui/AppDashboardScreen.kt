@@ -1610,6 +1610,7 @@ fun SettingsTab(
     val isPinLockEnabled by viewModel.isPinLockEnabled.collectAsState()
     val securePinCode by viewModel.securePinCode.collectAsState()
     val isEliteModeEnabled by viewModel.isEliteModeEnabled.collectAsState()
+    val isSystemLockEnabled by viewModel.isSystemLockEnabled.collectAsState()
     val wrongAttemptSound by viewModel.wrongAttemptSound.collectAsState()
     val appDisguiseIcon by viewModel.appDisguiseIcon.collectAsState()
     val appDisguiseName by viewModel.appDisguiseName.collectAsState()
@@ -1805,6 +1806,15 @@ fun SettingsTab(
                     displayTheme = displayTheme,
                     onCheckedChange = { viewModel.setEliteModeEnabled(it) }
                 )
+
+                // 3. System Credentials Lock Switch
+                SettingsToggleRow(
+                    title = "🔐 System Credentials Security Lockscreen",
+                    description = "Uses your core Android device password, Pattern, or PIN protection directly during app interceptions. Fully optimized for instant secure keyguard verifications.",
+                    checked = isSystemLockEnabled,
+                    displayTheme = displayTheme,
+                    onCheckedChange = { viewModel.setSystemLockEnabled(it) }
+                )
             }
         }
 
@@ -1923,7 +1933,8 @@ fun SettingsTab(
                         Surface(
                             modifier = Modifier.clickable {
                                 viewModel.setAppDisguise(iconName, displayName)
-                                Toast.makeText(context, "Simulated Camouflage $displayName [ $glyph ] actively deployed!", Toast.LENGTH_SHORT).show()
+                                com.example.util.CamouflageHelper.applyCamouflage(context, iconName)
+                                Toast.makeText(context, "System Camouflage $displayName [ $glyph ] actively deployed in real-time!", Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(12.dp),
                             color = if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.5f),

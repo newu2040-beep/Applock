@@ -57,6 +57,7 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
     val isPinLockEnabled = MutableStateFlow(LockSessionManager.isPinLockEnabled)
     val securePinCode = MutableStateFlow(LockSessionManager.securePinCode)
     val isEliteModeEnabled = MutableStateFlow(LockSessionManager.isEliteModeEnabled)
+    val isSystemLockEnabled = MutableStateFlow(LockSessionManager.isSystemLockEnabled)
     val wrongAttemptSound = MutableStateFlow(LockSessionManager.wrongAttemptSound)
     val appDisguiseIcon = MutableStateFlow(LockSessionManager.appDisguiseIcon)
     val appDisguiseName = MutableStateFlow(LockSessionManager.appDisguiseName)
@@ -336,5 +337,10 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
         LockSessionManager.customGalleryWallpaperUri = uri
         customGalleryWallpaperUri.value = uri
         setWallpaperPreset("Custom Gallery Wallpaper")
+    }
+
+    fun setSystemLockEnabled(enabled: Boolean) {
+        LockSessionManager.isSystemLockEnabled = enabled
+        isSystemLockEnabled.value = enabled
     }
 }

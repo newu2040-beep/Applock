@@ -75,6 +75,16 @@ class LockOverlayActivity : FragmentActivity() {
     private var targetAppName: String = "App"
     private var tts: TextToSpeech? = null
 
+    private val systemKeyguardLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            handleUnlockSuccess()
+        } else {
+            handleUnlockFailed()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -193,6 +203,9 @@ class LockOverlayActivity : FragmentActivity() {
                         onRequestBiometricPrompt = {
                             triggerNativeBiometric()
                         },
+                        onRequestSystemLockPrompt = {
+                            triggerSystemKeyguardUnlock()
+                        },
                         onCancel = {
                             forceGoHome()
                         }
@@ -201,9 +214,13 @@ class LockOverlayActivity : FragmentActivity() {
             }
         }
 
-        // Trigger native biometric dialog instantly when not displaying the fake crash panel
+        // Trigger system lock or native biometric dialog instantly when not displaying the fake crash panel
         if (!LockSessionManager.isFakeCrashEnabled) {
-            triggerNativeBiometric()
+            if (LockSessionManager.isSystemLockEnabled) {
+                triggerSystemKeyguardUnlock()
+            } else {
+                triggerNativeBiometric()
+            }
         }
     }
 
@@ -240,6 +257,27 @@ class LockOverlayActivity : FragmentActivity() {
             biometricPrompt.authenticate(promptInfo)
         } catch (e: Exception) {
             // Simulated biometric environment message
+        }
+    }
+
+    private fun triggerSystemKeyguardUnlock() {
+        val km = getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        if (km.isDeviceSecure) {
+            val intent = km.createConfirmDeviceCredentialIntent(
+                "Unlock $targetAppName",
+                "Authenticate using your device security PIN, Pattern, or Password."
+            )
+            if (intent != null) {
+                try {
+                    systemKeyguardLauncher.launch(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Could not open native system verification screen", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "Native device credentials launcher not generated.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(this, "No device security password, PIN, or pattern set on your phone.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -492,6 +530,7 @@ fun LockOverlayContent(
     onVerifySuccess: () -> Unit,
     onVerifyFailed: () -> Unit,
     onRequestBiometricPrompt: () -> Unit,
+    onRequestSystemLockPrompt: () -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
@@ -747,6 +786,32 @@ fun LockOverlayContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                if (LockSessionManager.isSystemLockEnabled) {
+                    Button(
+                        onClick = onRequestSystemLockPrompt,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = displayTheme.accentColor,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = "System Unlock",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "UNLOCK WITH SYSTEM KEYGUARD",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 if (!isEliteActive) {
                     // Quick Selector Tabs
                     Row(

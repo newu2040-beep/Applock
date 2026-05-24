@@ -26,6 +26,7 @@ object LockSessionManager {
     var securePinCode: String = "1234" // Default PIN
     var isPinLockEnabled: Boolean = true
     var isEliteModeEnabled: Boolean = false // Demands 3 layers of sequential biometric/PIN clearance
+    var isSystemLockEnabled: Boolean = false // Integrates Android native Keyguard locks (Password, PIN, Pattern)
     
     // --- CUSTOM WRONG ATTEMPT AUDIO ALARMS ---
     var wrongAttemptSound: String = "AI Vocal Lockdown Prompt"
@@ -61,7 +62,10 @@ object LockSessionManager {
     }
 
     fun removeClonedApp(packageName: String) {
-        clonedAppsList.remove(packageName)
+        synchronized(clonedAppsList) {
+            val toRemove = clonedAppsList.filter { it.startsWith("$packageName|") }
+            clonedAppsList.removeAll(toRemove.toSet())
+        }
     }
 
     fun isAppUnlocked(packageName: String): Boolean {
