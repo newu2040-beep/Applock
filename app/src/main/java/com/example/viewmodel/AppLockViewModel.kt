@@ -275,6 +275,13 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
                 attemptCount = (3..5).random()
             )
             repository.addIntruderLog(simulatedLog)
+            
+            // Dispatch notification on simulation
+            com.example.util.NotificationHelper.sendSecurityIncidentNotification(
+                getApplication(),
+                simulatedLog.appName,
+                simulatedLog.attemptCount
+            )
         }
     }
 }

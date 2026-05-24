@@ -1242,6 +1242,32 @@ fun SettingsTab(
         }
     }
 
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    val notificationLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasNotificationPermission = isGranted
+        if (isGranted) {
+            Toast.makeText(context, "System notifications fully armed!", Toast.LENGTH_SHORT).show()
+            // Dispatch a beautiful initial alert to let the user see the notification design
+            com.example.util.NotificationHelper.sendShieldStatusNotification(context, isMonitoring = true, lockedCount = 3)
+        } else {
+            Toast.makeText(context, "Notification alerts denied. Intrusion event alarms won't display.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val isDark by viewModel.isDarkTheme.collectAsState()
     val isAmoled by viewModel.isAmoled.collectAsState()
     val themeName by viewModel.activeThemeName.collectAsState()
@@ -1519,6 +1545,122 @@ fun SettingsTab(
             }
         }
 
+        // Shield Notification Settings and Real-time Alerts Testing
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(displayTheme.surfaceColor)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Shield Notification Settings",
+                    color = displayTheme.onSurfaceColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Text(
+                    text = "Configure and test real-time alerts. Ensure permission is granted so SecureUnlock can warn you of unauthorized accesses.",
+                    color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
+                    fontSize = 11.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (!hasNotificationPermission) {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    Toast.makeText(context, "Notifications are automatically enabled for this OS!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                com.example.util.NotificationHelper.sendSecurityIncidentNotification(
+                                    context, 
+                                    listOf("WhatsApp", "Instagram", "Photos", "Gmail").random(), 
+                                    (2..4).random()
+                                )
+                                Toast.makeText(context, "Heads-up threat alarm sent! Swipe down to view.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = displayTheme.primary, contentColor = Color.Black),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Breach Alert", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!hasNotificationPermission) {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    Toast.makeText(context, "Notifications are automatically enabled!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                com.example.util.NotificationHelper.sendShieldStatusNotification(
+                                    context, 
+                                    isMonitoring = true, 
+                                    lockedCount = (4..12).random()
+                                )
+                                Toast.makeText(context, "Silent persistent monitoring banner updated!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = displayTheme.accentColor, contentColor = Color.Black),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Active Shield", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!hasNotificationPermission) {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    Toast.makeText(context, "Notifications are automatically enabled!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                com.example.util.NotificationHelper.sendWeeklyInsightsNotification(
+                                    context,
+                                    totalBreaches = (3..8).random(),
+                                    highestRiskApp = listOf("WhatsApp", "Instagram", "Google Photos").random()
+                                )
+                                Toast.makeText(context, "Security Weekly Intelligence summary posted!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14B8A6), contentColor = Color.Black),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Intelligence", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.08f))
+                )
+
+                Text(
+                    text = "ℹ️ System notification channel options allow you to individually customize sound, priority, and vibrations for each of these security alerts inside device settings drawer.",
+                    color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                )
+            }
+        }
+
         // Actionable Permissions Checklist
         item {
             Column(
@@ -1569,6 +1711,26 @@ fun SettingsTab(
                             cameraLauncher.launch(android.Manifest.permission.CAMERA)
                         } else {
                             Toast.makeText(context, "Camera capture permission is already granted!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+
+                PermissionLinkCard(
+                    title = "System alerts & notifications",
+                    desc = "Delivers threat breach warnings, safety alerts and offline audit logs.",
+                    isGranted = hasNotificationPermission,
+                    displayTheme = displayTheme,
+                    onClick = {
+                        if (!hasNotificationPermission) {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                Toast.makeText(context, "Notification alerts are automatically armed on this OS version!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            // If already granted, run a demo alert when tapped
+                            Toast.makeText(context, "Permission already granted! Dispatching demo warning...", Toast.LENGTH_SHORT).show()
+                            com.example.util.NotificationHelper.sendSecurityIncidentNotification(context, "System Protector", 3)
                         }
                     }
                 )

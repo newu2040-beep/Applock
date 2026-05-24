@@ -333,6 +333,13 @@ class LockOverlayActivity : FragmentActivity() {
             )
             db.dao.insertIntruderLog(log)
             
+            // Dispatch a real-time system security notification to alert the user
+            com.example.util.NotificationHelper.sendSecurityIncidentNotification(
+                this@LockOverlayActivity,
+                targetAppName,
+                LockSessionManager.failAttemptsCount
+            )
+            
             Toast.makeText(
                 this@LockOverlayActivity,
                 "Intruder security photo captured: $targetAppName",

@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import com.example.service.LockSessionManager
 import com.example.ui.AppDashboardScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.util.NotificationHelper
 import com.example.viewmodel.AppLockViewModel
 
 class MainActivity : ComponentActivity() {
@@ -34,6 +35,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Initialize Notification Channels
+        NotificationHelper.createNotificationChannels(this)
 
         // Register screen off receiver dynamically for active session clearing
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
