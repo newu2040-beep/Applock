@@ -103,44 +103,55 @@ class LockOverlayActivity : FragmentActivity() {
             val isAmoled = LockSessionManager.isAmoledMode
             val themeName = LockSessionManager.activeThemeName
             val displayTheme = SecureThemes.getTheme(themeName, isAmoled, isDark)
+            val selectedWallpaper = LockSessionManager.wallpaperPreset
 
             var isFakeCrashShowing by remember { mutableStateOf(LockSessionManager.isFakeCrashEnabled) }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                displayTheme.backgroundStart,
-                                displayTheme.backgroundEnd
-                            )
-                        )
-                    )
             ) {
-                if (displayTheme.name == "Immersive UI") {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        // Top-Left Cyan Blur overlay
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0x1B22D3EE), Color.Transparent),
-                                center = androidx.compose.ui.geometry.Offset(x = size.width * -0.1f, y = size.height * 0.1f),
-                                radius = size.width * 0.8f
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(x = size.width * -0.1f, y = size.height * 0.1f),
-                            radius = size.width * 0.8f
-                        )
-                        // Bottom-Right Indigo Blur overlay
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0x1A6366F1), Color.Transparent),
-                                center = androidx.compose.ui.geometry.Offset(x = size.width * 1.1f, y = size.height * 0.8f),
-                                radius = size.width * 0.7f
-                            ),
-                            center = androidx.compose.ui.geometry.Offset(x = size.width * 1.1f, y = size.height * 0.8f),
-                            radius = size.width * 0.7f
-                        )
+                // Background preset rendering
+                if (selectedWallpaper == "Standard Slate" || selectedWallpaper.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        displayTheme.backgroundStart,
+                                        displayTheme.backgroundEnd
+                                    )
+                                )
+                            )
+                    ) {
+                        if (displayTheme.name == "Immersive UI") {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                // Top-Left Cyan Blur overlay
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color(0x1B22D3EE), Color.Transparent),
+                                        center = androidx.compose.ui.geometry.Offset(x = size.width * -0.1f, y = size.height * 0.1f),
+                                        radius = size.width * 0.8f
+                                    ),
+                                    center = androidx.compose.ui.geometry.Offset(x = size.width * -0.1f, y = size.height * 0.1f),
+                                    radius = size.width * 0.8f
+                                )
+                                // Bottom-Right Indigo Blur overlay
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color(0x1A6366F1), Color.Transparent),
+                                        center = androidx.compose.ui.geometry.Offset(x = size.width * 1.1f, y = size.height * 0.8f),
+                                        radius = size.width * 0.7f
+                                    ),
+                                    center = androidx.compose.ui.geometry.Offset(x = size.width * 1.1f, y = size.height * 0.8f),
+                                    radius = size.width * 0.7f
+                                )
+                            }
+                        }
                     }
+                } else {
+                    DynamicPresetBackground(preset = selectedWallpaper, displayTheme = displayTheme)
                 }
 
                 if (isFakeCrashShowing) {
@@ -791,3 +802,286 @@ fun WavyBackgroundPulse(
         )
     }
 }
+
+@Composable
+fun DynamicPresetBackground(
+    preset: String,
+    displayTheme: com.example.ui.theme.AppThemeColors
+) {
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        when (preset) {
+            "Starry Cyber Mesh" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "mesh")
+                val meshAnimate by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(12000, easing = LinearEasing)
+                    ),
+                    label = "meshScale"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF02040A))
+                    
+                    val gridSpacing = 48.dp.toPx()
+                    for (x in 0..size.width.toInt() step gridSpacing.toInt()) {
+                        drawLine(
+                            color = displayTheme.primary.copy(alpha = 0.04f),
+                            start = androidx.compose.ui.geometry.Offset(x.toFloat(), 0f),
+                            end = androidx.compose.ui.geometry.Offset(x.toFloat(), size.height),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+                    for (y in 0..size.height.toInt() step gridSpacing.toInt()) {
+                        drawLine(
+                            color = displayTheme.primary.copy(alpha = 0.04f),
+                            start = androidx.compose.ui.geometry.Offset(0f, y.toFloat()),
+                            end = androidx.compose.ui.geometry.Offset(size.width, y.toFloat()),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+
+                    val nodes = listOf(
+                        androidx.compose.ui.geometry.Offset(0.12f, 0.18f),
+                        androidx.compose.ui.geometry.Offset(0.32f, 0.12f),
+                        androidx.compose.ui.geometry.Offset(0.48f, 0.28f),
+                        androidx.compose.ui.geometry.Offset(0.18f, 0.42f),
+                        androidx.compose.ui.geometry.Offset(0.38f, 0.58f),
+                        androidx.compose.ui.geometry.Offset(0.58f, 0.42f),
+                        androidx.compose.ui.geometry.Offset(0.72f, 0.22f),
+                        androidx.compose.ui.geometry.Offset(0.88f, 0.38f),
+                        androidx.compose.ui.geometry.Offset(0.68f, 0.68f),
+                        androidx.compose.ui.geometry.Offset(0.84f, 0.78f),
+                        androidx.compose.ui.geometry.Offset(0.48f, 0.82f),
+                        androidx.compose.ui.geometry.Offset(0.24f, 0.76f)
+                    )
+
+                    val pxNodes = nodes.map { point ->
+                        val swayX = kotlin.math.cos(meshAnimate + (point.x * 8f)) * 14.dp.toPx()
+                        val swayY = kotlin.math.sin(meshAnimate + (point.y * 8f)) * 14.dp.toPx()
+                        androidx.compose.ui.geometry.Offset(
+                            point.x * size.width + swayX,
+                            point.y * size.height + swayY
+                        )
+                    }
+
+                    for (i in pxNodes.indices) {
+                        for (j in i + 1 until pxNodes.size) {
+                            val dist = (pxNodes[i] - pxNodes[j]).getDistance()
+                            if (dist < 200.dp.toPx()) {
+                                val alpha = (1f - dist / 200.dp.toPx()).coerceAtLeast(0f) * 0.22f
+                                drawLine(
+                                    color = displayTheme.primary.copy(alpha = alpha),
+                                    start = pxNodes[i],
+                                    end = pxNodes[j],
+                                    strokeWidth = 1.2.dp.toPx()
+                                )
+                            }
+                        }
+                    }
+
+                    pxNodes.forEach { node ->
+                        drawCircle(
+                            color = displayTheme.primary,
+                            radius = 3.dp.toPx(),
+                            center = node
+                        )
+                        drawCircle(
+                            color = displayTheme.accentColor.copy(alpha = 0.25f),
+                            radius = 8.dp.toPx(),
+                            center = node
+                        )
+                    }
+                }
+            }
+            "Deep Midnight Nebula" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "nebula")
+                val pulseScale by infiniteTransition.animateFloat(
+                    initialValue = 0.95f,
+                    targetValue = 1.12f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(5000, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulse"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF030107))
+                    
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0x2E4F46E5), Color.Transparent),
+                            center = androidx.compose.ui.geometry.Offset(size.width * 0.25f, size.height * 0.35f),
+                            radius = size.width * 0.85f * pulseScale
+                        ),
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.25f, size.height * 0.35f),
+                        radius = size.width * 0.85f * pulseScale
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0x229333EA), Color.Transparent),
+                            center = androidx.compose.ui.geometry.Offset(size.width * 0.75f, size.height * 0.65f),
+                            radius = size.width * 0.75f * (2f - pulseScale)
+                        ),
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.75f, size.height * 0.65f),
+                        radius = size.width * 0.75f * (2f - pulseScale)
+                    )
+
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.05f),
+                        center = center,
+                        radius = 170.dp.toPx() * pulseScale,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                }
+            }
+            "Virtual Matrix Rain" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "matrix")
+                val matrixOffset by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1200f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(9000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "offset"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF020604))
+                    
+                    val colCount = 14
+                    val colWidth = size.width / colCount
+                    for (i in 0 until colCount) {
+                        val x = i * colWidth + colWidth / 2f
+                        val speedMult = (i % 4 + 1) * 0.4f
+                        val initialY = (i * 180) % size.height
+                        val currentY = (initialY + matrixOffset * speedMult) % size.height
+                        
+                        drawLine(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color(0x9E10B981), Color(0xFF34D399)),
+                                startY = currentY - 180.dp.toPx(),
+                                endY = currentY
+                            ),
+                            start = androidx.compose.ui.geometry.Offset(x, currentY - 180.dp.toPx()),
+                            end = androidx.compose.ui.geometry.Offset(x, currentY),
+                            strokeWidth = 1.8.dp.toPx()
+                        )
+                        
+                        drawCircle(
+                            color = Color(0xFFE6FDF4),
+                            center = androidx.compose.ui.geometry.Offset(x, currentY),
+                            radius = 2.dp.toPx()
+                        )
+                    }
+                }
+            }
+            "Glassmorphic Sunset Glow" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "sunset")
+                val sunsetPulse by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(10000, easing = LinearEasing)
+                    ),
+                    label = "sunsetPulse"
+                )
+                val blurModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Modifier.blur(48.dp)
+                } else Modifier
+                
+                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F0B18))) {
+                    Canvas(modifier = Modifier.fillMaxSize().then(blurModifier)) {
+                        val o1X = size.width * 0.35f + kotlin.math.cos(sunsetPulse) * 110.dp.toPx()
+                        val o1Y = size.height * 0.32f + kotlin.math.sin(sunsetPulse) * 110.dp.toPx()
+                        val o2X = size.width * 0.65f + kotlin.math.sin(sunsetPulse) * 90.dp.toPx()
+                        val o2Y = size.height * 0.62f + kotlin.math.cos(sunsetPulse) * 90.dp.toPx()
+                        
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(Color(0x3FF43F5E), Color.Transparent),
+                                radius = 220.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(o1X, o1Y)
+                            ),
+                            center = androidx.compose.ui.geometry.Offset(o1X, o1Y),
+                            radius = 220.dp.toPx()
+                        )
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(Color(0x3AF59E0B), Color.Transparent),
+                                radius = 240.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(o2X, o2Y)
+                            ),
+                            center = androidx.compose.ui.geometry.Offset(o2X, o2Y),
+                            radius = 240.dp.toPx()
+                        )
+                    }
+                }
+            }
+            "Cyberpunk Grid Neon" -> {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val targetOffsetPx = with(density) { 44.dp.toPx() }
+                
+                val infiniteTransition = rememberInfiniteTransition(label = "cyberpunk")
+                val gridOffset by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = targetOffsetPx,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(2200, easing = LinearEasing)
+                    ),
+                    label = "offset"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF06020A))
+                    
+                    val horizonY = size.height * 0.5f
+                    val gridCount = 22
+                    
+                    for (i in 0..gridCount) {
+                        val startX = (i * size.width) / gridCount
+                        drawLine(
+                            color = Color(0x2DEC4899),
+                            start = androidx.compose.ui.geometry.Offset(startX, size.height),
+                            end = androidx.compose.ui.geometry.Offset(size.width / 2f, horizonY),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+                    
+                    var currentY = horizonY
+                    var step = 10.dp.toPx()
+                    while (currentY < size.height) {
+                        val drawY = currentY + gridOffset * (currentY / size.height)
+                        if (drawY in horizonY..size.height) {
+                            val alpha = ((drawY - horizonY) / (size.height - horizonY)).coerceIn(0f, 1f) * 0.25f
+                            drawLine(
+                                color = Color(0x3206B6D4).copy(alpha = alpha),
+                                start = androidx.compose.ui.geometry.Offset(0f, drawY),
+                                end = androidx.compose.ui.geometry.Offset(size.width, drawY),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+                        currentY += step
+                        step *= 1.25f
+                    }
+                }
+            }
+            else -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    displayTheme.backgroundStart,
+                                    displayTheme.backgroundEnd
+                                )
+                            )
+                        )
+                )
+            }
+        }
+    }
+}
+

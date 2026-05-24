@@ -588,6 +588,16 @@ fun AppsTab(
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val context = LocalContext.current
+    var selectedCategory by remember { mutableStateOf("All") }
+
+    val filteredList = remember(appsList, selectedCategory) {
+        when (selectedCategory) {
+            "Apps Only" -> appsList.filter { !it.isGame }
+            "Games Only" -> appsList.filter { it.isGame }
+            "Locked Only" -> appsList.filter { it.isLocked }
+            else -> appsList
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -626,9 +636,40 @@ fun AppsTab(
                 .testTag("app_search_field")
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        if (appsList.isEmpty()) {
+        // Category Filter Chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val categories = listOf("All", "Apps Only", "Games Only", "Locked Only")
+            categories.forEach { cat ->
+                val isSel = selectedCategory == cat
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.3f))
+                        .border(1.dp, if (isSel) displayTheme.primary else Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                        .clickable { selectedCategory = cat }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = cat,
+                        color = if (isSel) Color.Black else displayTheme.onSurfaceColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (filteredList.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -644,7 +685,7 @@ fun AppsTab(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "No apps match your search query",
+                        text = "No apps match this category/query",
                         color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
                         fontSize = 14.sp
                     )
@@ -656,7 +697,7 @@ fun AppsTab(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(
-                    items = appsList,
+                    items = filteredList,
                     key = { it.packageName }
                 ) { appItem ->
                     AppRowItem(
@@ -798,6 +839,7 @@ fun IntrudersTab(
     intruders: List<IntruderLog>
 ) {
     val context = LocalContext.current
+    var activeLogForInvoice by remember { mutableStateOf<IntruderLog?>(null) }
 
     Column(
         modifier = Modifier
@@ -915,6 +957,7 @@ fun IntrudersTab(
                     IntruderLogCard(
                         log = intruder,
                         displayTheme = displayTheme,
+                        onClick = { activeLogForInvoice = intruder },
                         onDelete = { viewModel.deleteIntruderLog(intruder) }
                     )
                 }
@@ -923,12 +966,132 @@ fun IntrudersTab(
 
         Spacer(modifier = Modifier.height(12.dp))
     }
+
+    // Invoice-styled ticket modal
+    if (activeLogForInvoice != null) {
+        val logForInvoice = activeLogForInvoice!!
+        val dateStringInvoice = remember(logForInvoice.timestamp) {
+            SimpleDateFormat("yyyy-MM-dd 'at' HH:mm a", Locale.getDefault()).format(Date(logForInvoice.timestamp))
+        }
+        AlertDialog(
+            onDismissRequest = { activeLogForInvoice = null },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(Icons.Default.Receipt, contentDescription = null, tint = displayTheme.primary)
+                    Text("BREACH INCIDENT INVOICE", color = displayTheme.primary, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .border(1.dp, displayTheme.primary.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val photoFile = remember(logForInvoice.photoPath) {
+                            if (!logForInvoice.photoPath.isNullOrEmpty()) java.io.File(logForInvoice.photoPath) else null
+                        }
+                        if (photoFile != null && photoFile.exists() && photoFile.length() > 0) {
+                            coil.compose.AsyncImage(
+                                model = photoFile,
+                                contentDescription = "Intruder",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text("[Procedural Spy Photo Rendered]", color = displayTheme.primary.copy(alpha = 0.5f), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+
+                    Text(
+                        text = """
+                            -----------------------------------------
+                               INCIDENT EVIDENCE ANALYSIS        
+                            -----------------------------------------
+                            Ticket Registry  : #SR-${logForInvoice.id.toString().substringAfterLast("@").take(6).ifEmpty { "81AD24" }}
+                            Security Date    : $dateStringInvoice
+                            Bypass Target    : ${logForInvoice.appName}
+                            Biometric Fail   : ${logForInvoice.attemptCount} Failed Attempts
+                            Burglary Status  : LOCKED OUT (HIGH RISK)
+                            Alarm Triggered  : Vocal speech alert loaded
+                            =========================================
+                            This audit log is saved securely offline on device 
+                            local storage. Export below to save as files or 
+                            load into public image gallery.
+                        """.trimIndent(),
+                        color = displayTheme.onSurfaceColor,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 16.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val path = com.example.util.ReportExporter.saveReportToPublicText(context, logForInvoice)
+                            if (path != null) {
+                                Toast.makeText(context, "Report exported: $path", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "Could not save file.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = displayTheme.primary, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Save TXT", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val path = com.example.util.ReportExporter.savePhotoToPublicGallery(context, logForInvoice.photoPath)
+                            if (path != null) {
+                                Toast.makeText(context, path, Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "No physical photo to export yet.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = displayTheme.accentColor, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Export JPG", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { activeLogForInvoice = null }) {
+                    Text("Close", color = displayTheme.onSurfaceColor.copy(alpha = 0.6f))
+                }
+            },
+            containerColor = displayTheme.surfaceColor,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
 }
 
 @Composable
 fun IntruderLogCard(
     log: IntruderLog,
     displayTheme: com.example.ui.theme.AppThemeColors,
+    onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val dateString = remember(log.timestamp) {
@@ -949,6 +1112,7 @@ fun IntruderLogCard(
             .clip(RoundedCornerShape(20.dp))
             .background(displayTheme.surfaceColor)
             .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+            .clickable { onClick() }
             .padding(16.dp)
     ) {
         Row(
@@ -1061,6 +1225,23 @@ fun SettingsTab(
     val context = LocalContext.current
     var clipboardManager = LocalClipboardManager.current
     
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+        if (isGranted) {
+            Toast.makeText(context, "Front Camera alarm fully armed!", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Camera denied. Falling back to digital procedural render.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val isDark by viewModel.isDarkTheme.collectAsState()
     val isAmoled by viewModel.isAmoled.collectAsState()
     val themeName by viewModel.activeThemeName.collectAsState()
@@ -1381,9 +1562,15 @@ fun SettingsTab(
                 PermissionLinkCard(
                     title = "Front Camera capture access",
                     desc = "Takes localized snaps of failed login attempts.",
-                    isGranted = true, // simulated/granted
+                    isGranted = hasCameraPermission,
                     displayTheme = displayTheme,
-                    onClick = {}
+                    onClick = {
+                        if (!hasCameraPermission) {
+                            cameraLauncher.launch(android.Manifest.permission.CAMERA)
+                        } else {
+                            Toast.makeText(context, "Camera capture permission is already granted!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 )
 
                 PermissionLinkCard(
@@ -1434,6 +1621,52 @@ fun SettingsTab(
                         }
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = displayTheme.onSurfaceColor.copy(alpha = 0.5f))
+                }
+            }
+        }
+
+        // Developer Credit Card
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = "Love",
+                        tint = Color(0xFFFF3355),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Built with Love",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "•",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.4f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Editingcells",
+                        color = displayTheme.primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

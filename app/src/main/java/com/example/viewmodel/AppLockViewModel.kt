@@ -23,7 +23,8 @@ data class AppListItem(
     val packageName: String,
     val appName: String,
     val isSystemApp: Boolean = false,
-    val isLocked: Boolean = false
+    val isLocked: Boolean = false,
+    val isGame: Boolean = false
 )
 
 class AppLockViewModel(application: Application) : AndroidViewModel(application) {
@@ -119,7 +120,12 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
                 if (launchIntent != null) {
                     val appName = pm.getApplicationLabel(app).toString()
                     val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                    list.add(AppListItem(app.packageName, appName, isSystem))
+                    val isGame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        app.category == ApplicationInfo.CATEGORY_GAME
+                    } else {
+                        (app.flags and ApplicationInfo.FLAG_IS_GAME) != 0
+                    }
+                    list.add(AppListItem(app.packageName, appName, isSystem, isGame = isGame))
                 }
             }
 
@@ -138,7 +144,12 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
                     AppListItem("com.facebook.katana", "Facebook", isSystemApp = false),
                     AppListItem("com.twitter.android", "Twitter / X", isSystemApp = false),
                     AppListItem("com.spotify.music", "Spotify", isSystemApp = false),
-                    AppListItem("com.android.vending", "Google Play Store", isSystemApp = true)
+                    AppListItem("com.android.vending", "Google Play Store", isSystemApp = true),
+                    AppListItem("com.roblox.client", "Roblox", isSystemApp = false, isGame = true),
+                    AppListItem("com.king.candycrushsaga", "Candy Crush Saga", isSystemApp = false, isGame = true),
+                    AppListItem("com.kiloo.subwaysurf", "Subway Surfers", isSystemApp = false, isGame = true),
+                    AppListItem("com.tencent.ig", "PUBG MOBILE", isSystemApp = false, isGame = true),
+                    AppListItem("com.innersloth.spacemafia", "Among Us", isSystemApp = false, isGame = true)
                 )
                 for (fallback in fallbacks) {
                     if (fallback.packageName != ourPackage && list.none { it.packageName == fallback.packageName }) {
