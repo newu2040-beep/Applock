@@ -36,6 +36,8 @@ object LockSessionManager {
     var wrongAttemptSound: String = "AI Vocal Lockdown Prompt"
     // Audio options: "Siren Alarm Threat Loop", "AI Vocal Lockdown Prompt", "Short Sci-Fi Beep Error", "Retro Arcade Buzzer", "Dramatic Nuclear Alert", "High-Frequency Sonic Sweep", "Imported Device Audio"
     var importedAlarmAudioUri: String = ""
+    var audioTrimStartSec: Int = 0
+    var audioTrimDurationSec: Int = 10
 
     // --- STEALTH launcher mask ---
     var appDisguiseIcon: String = "Default Shield"

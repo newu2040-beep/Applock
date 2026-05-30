@@ -56,6 +56,8 @@ import com.example.service.SecureUnlockDeviceAdminReceiver
 import com.example.ui.theme.SecureThemes
 import com.example.viewmodel.AppListItem
 import com.example.viewmodel.AppLockViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -1627,6 +1629,12 @@ fun SettingsTab(
     val customGalleryWallpaperUri by viewModel.customGalleryWallpaperUri.collectAsState()
     val customRelockPeriodMinutes by viewModel.customRelockPeriodMinutes.collectAsState()
     val importedAlarmAudioUri by viewModel.importedAlarmAudioUri.collectAsState()
+    val audioTrimStartSec by viewModel.audioTrimStartSec.collectAsState()
+    val audioTrimDurationSec by viewModel.audioTrimDurationSec.collectAsState()
+
+    val scope = rememberCoroutineScope()
+    var previewPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var isPlayingPreview by remember { mutableStateOf(false) }
 
     var showPinDialog by remember { mutableStateOf(false) }
     var pinValueInput by remember { mutableStateOf(securePinCode) }
@@ -1665,39 +1673,36 @@ fun SettingsTab(
         }
     }
 
-    // 2.b Audio picker launcher
+    // 2.b Audio picker launcher - copies to private safe cache to avoid permission errors
     val audioLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            viewModel.setImportedAlarmAudioUri(uri.toString())
-            viewModel.setWrongAttemptSound("Imported Device Audio")
-            Toast.makeText(context, "Custom alert system audio equipped successfully!", Toast.LENGTH_SHORT).show()
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val destFile = java.io.File(context.filesDir, "custom_lock_alarm.mp3")
+                    if (destFile.exists()) {
+                        destFile.delete()
+                    }
+                    destFile.outputStream().use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                    viewModel.setImportedAlarmAudioUri(destFile.absolutePath)
+                    viewModel.setWrongAttemptSound("Imported Device Audio")
+                    Toast.makeText(context, "Custom alert system audio equipped successfully!", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to import custom audio: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
-    val audioPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        android.Manifest.permission.READ_MEDIA_AUDIO
-    } else {
-        android.Manifest.permission.READ_EXTERNAL_STORAGE
-    }
-
-    var hasAudioPermission by remember {
-        mutableStateOf(
-            androidx.core.content.ContextCompat.checkSelfPermission(context, audioPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        )
-    }
-
+    // No runtime file permissions are required for GetContent() / copyTo private files!
+    val hasAudioPermission = true
     val audioPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        hasAudioPermission = isGranted
-        if (isGranted) {
-            Toast.makeText(context, "Voice & Audio files authorized! Opening audio files list...", Toast.LENGTH_SHORT).show()
-            audioLauncher.launch("audio/*")
-        } else {
-            Toast.makeText(context, "Audio file authorization denied. Procedural alerts will be used.", Toast.LENGTH_LONG).show()
-        }
+        audioLauncher.launch("audio/*")
     }
 
     LazyColumn(
@@ -2158,11 +2163,7 @@ fun SettingsTab(
                                 modifier = Modifier.clickable {
                                     viewModel.setWrongAttemptSound(preset)
                                     if (preset == "Imported Device Audio" && importedAlarmAudioUri.isEmpty()) {
-                                        if (hasAudioPermission) {
-                                            audioLauncher.launch("audio/*")
-                                        } else {
-                                            audioPermissionLauncher.launch(audioPermission)
-                                        }
+                                        audioLauncher.launch("audio/*")
                                     } else {
                                         Toast.makeText(context, "$preset alarm signature armed!", Toast.LENGTH_SHORT).show()
                                     }
@@ -2192,11 +2193,7 @@ fun SettingsTab(
                                 .background(displayTheme.primary.copy(alpha = 0.06f))
                                 .border(1.dp, displayTheme.primary.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
                                 .clickable {
-                                    if (hasAudioPermission) {
-                                        audioLauncher.launch("audio/*")
-                                    } else {
-                                        audioPermissionLauncher.launch(audioPermission)
-                                    }
+                                    audioLauncher.launch("audio/*")
                                 }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -2204,7 +2201,7 @@ fun SettingsTab(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                 Icon(
-                                    imageVector = Icons.Default.PlayArrow,
+                                    imageVector = if (importedAlarmAudioUri.isNotEmpty()) Icons.Default.MusicNote else Icons.Default.Audiotrack,
                                     contentDescription = null,
                                     tint = displayTheme.primary,
                                     modifier = Modifier.size(20.dp)
@@ -2221,7 +2218,7 @@ fun SettingsTab(
                                         text = if (importedAlarmAudioUri.isEmpty()) {
                                             "No custom device audio file loaded. Touch to select..."
                                         } else {
-                                            "Armed URI: " + importedAlarmAudioUri.substringAfterLast("/")
+                                            "Armed File: " + importedAlarmAudioUri.substringAfterLast("/")
                                         },
                                         color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
                                         fontSize = 10.sp,
@@ -2235,6 +2232,209 @@ fun SettingsTab(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
+                        }
+
+                        // --- SOPHISTICATED APPLE-STYLE AUDIO TRIMMER PANEL ---
+                        if (importedAlarmAudioUri.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(displayTheme.surfaceColor.copy(alpha = 0.4f))
+                                    .border(1.dp, displayTheme.accentColor.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "LIQUID AUDIO TRIMMER",
+                                    color = displayTheme.accentColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+
+                                // Real-time Simulated Waveform Visualizer
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black.copy(alpha = 0.3f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val barCount = 30
+                                        val barWidth = 6.dp.toPx()
+                                        val gap = 4.dp.toPx()
+                                        val totalWidth = barCount * barWidth + (barCount - 1) * gap
+                                        val startX = (size.width - totalWidth) / 2f
+                                        
+                                        for (i in 0 until barCount) {
+                                            val progressIter = i.toFloat() / barCount
+                                            // Highlight bar if it's within the selected trim window
+                                            val trimStartProgress = audioTrimStartSec.toFloat() / 30f
+                                            val trimEndProgress = (audioTrimStartSec + audioTrimDurationSec).toFloat() / 30f
+                                            val isWithinTrim = progressIter >= trimStartProgress && progressIter <= trimEndProgress
+                                            
+                                            // Calculate height randomly/sinusoidally
+                                            val baseHeight = if (isPlayingPreview) {
+                                                32.dp.toPx() * (0.3f + 0.7f * kotlin.math.sin((i * 0.4f) + (System.currentTimeMillis() * 0.01f).toFloat()).coerceIn(-1f..1f).let { Math.abs(it) })
+                                            } else {
+                                                18.dp.toPx() * (0.4f + 0.6f * kotlin.math.sin(i * 0.5f).let { Math.abs(it) })
+                                            }
+                                            
+                                            val color = if (isWithinTrim) {
+                                                if (isPlayingPreview) displayTheme.primary else displayTheme.accentColor
+                                            } else {
+                                                displayTheme.onSurfaceColor.copy(alpha = 0.15f)
+                                            }
+                                            
+                                            val x = startX + i * (barWidth + gap)
+                                            val y = (size.height - baseHeight) / 2f
+                                            drawRoundRect(
+                                                color = color,
+                                                topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                                                size = androidx.compose.ui.geometry.Size(barWidth, baseHeight),
+                                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Trim Start Time Slider
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Trim Start Offset",
+                                            color = displayTheme.onSurfaceColor.copy(alpha = 0.7f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "$audioTrimStartSec seconds",
+                                            color = displayTheme.accentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                    Slider(
+                                        value = audioTrimStartSec.toFloat(),
+                                        onValueChange = { viewModel.setAudioTrimStartSec(it.toInt().coerceIn(0, 30)) },
+                                        valueRange = 0f..30f,
+                                        steps = 29,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = displayTheme.accentColor,
+                                            activeTrackColor = displayTheme.accentColor,
+                                            inactiveTrackColor = displayTheme.onSurfaceColor.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().height(24.dp)
+                                    )
+                                }
+
+                                // Trim Play Duration Slider
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Active Clip Length",
+                                            color = displayTheme.onSurfaceColor.copy(alpha = 0.7f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "$audioTrimDurationSec seconds",
+                                            color = displayTheme.primary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                    Slider(
+                                        value = audioTrimDurationSec.toFloat(),
+                                        onValueChange = { viewModel.setAudioTrimDurationSec(it.toInt().coerceIn(1, 40)) },
+                                        valueRange = 1f..40f,
+                                        steps = 38,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = displayTheme.primary,
+                                            activeTrackColor = displayTheme.primary,
+                                            inactiveTrackColor = displayTheme.onSurfaceColor.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().height(24.dp)
+                                    )
+                                }
+
+                                // Preview control elements
+                                Button(
+                                    onClick = {
+                                        if (isPlayingPreview) {
+                                            try {
+                                                previewPlayer?.stop()
+                                                previewPlayer?.release()
+                                            } catch (ex: Exception) {}
+                                            previewPlayer = null
+                                            isPlayingPreview = false
+                                        } else {
+                                            try {
+                                                previewPlayer?.stop()
+                                                previewPlayer?.release()
+                                            } catch (ex: Exception) {}
+                                            try {
+                                                val player = android.media.MediaPlayer().apply {
+                                                    setDataSource(importedAlarmAudioUri)
+                                                    prepare()
+                                                    seekTo(audioTrimStartSec * 1000)
+                                                    start()
+                                                }
+                                                previewPlayer = player
+                                                isPlayingPreview = true
+                                                
+                                                scope.launch {
+                                                    kotlinx.coroutines.delay(audioTrimDurationSec * 1000L)
+                                                    if (isPlayingPreview && previewPlayer == player) {
+                                                        try {
+                                                            player.stop()
+                                                            player.release()
+                                                        } catch (ex: Exception) {}
+                                                        previewPlayer = null
+                                                        isPlayingPreview = false
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Could not preview: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isPlayingPreview) Color(0xFFEF4444) else displayTheme.primary,
+                                        contentColor = Color.Black
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                        Icon(
+                                            imageVector = if (isPlayingPreview) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isPlayingPreview) "STOP TRACK PREVIEW" else "PREVIEW AUDIO SLICE",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

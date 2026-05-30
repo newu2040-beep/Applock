@@ -323,7 +323,7 @@ class LockOverlayActivity : FragmentActivity() {
     private fun playAlertSound() {
         val selectedSound = LockSessionManager.wrongAttemptSound
         val context = this
-        lifecycleScope.launch(Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.Main) {
             try {
                 mediaPlayer?.let {
                     if (it.isPlaying) {
@@ -334,15 +334,44 @@ class LockOverlayActivity : FragmentActivity() {
                 mediaPlayer = null
 
                 if (selectedSound == "Imported Device Audio" && LockSessionManager.importedAlarmAudioUri.isNotEmpty()) {
-                    val uri = android.net.Uri.parse(LockSessionManager.importedAlarmAudioUri)
-                    mediaPlayer = MediaPlayer().apply {
-                        setDataSource(context, uri)
-                        prepare()
-                        isLooping = false
-                        start()
+                    val filePath = LockSessionManager.importedAlarmAudioUri
+                    try {
+                        val player = MediaPlayer().apply {
+                            setDataSource(filePath)
+                            prepare()
+                            isLooping = false
+                            seekTo(LockSessionManager.audioTrimStartSec * 1000)
+                            start()
+                        }
+                        mediaPlayer = player
+                        
+                        // Handle the active clip trim length
+                        lifecycleScope.launch {
+                            kotlinx.coroutines.delay(LockSessionManager.audioTrimDurationSec * 1000L)
+                            if (mediaPlayer == player) {
+                                try {
+                                    if (player.isPlaying) {
+                                        player.stop()
+                                    }
+                                } catch (ex: Exception) {}
+                                try { player.release() } catch (ex: Exception) {}
+                                if (mediaPlayer == player) {
+                                    mediaPlayer = null
+                                }
+                            }
+                        }
+                    } catch (ex: Exception) {
+                        ex.printStackTrace()
                     }
                 } else {
-                    playProceduralSynthTone(selectedSound)
+                    // Play synthesized tone on background IO thread
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            playProceduralSynthTone(selectedSound)
+                        } catch (err: Exception) {
+                            err.printStackTrace()
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
