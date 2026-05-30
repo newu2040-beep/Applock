@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 object LockSessionManager {
     private val unlockedPackages = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val unlockedTimestamps = java.util.Collections.synchronizedMap(mutableMapOf<String, Long>())
     
     private val _currentlyLockingPackage = MutableStateFlow<String?>(null)
     val currentlyLockingPackage: StateFlow<String?> = _currentlyLockingPackage
@@ -22,6 +23,9 @@ object LockSessionManager {
     var silentCaptureEnabled: Boolean = true
     var isLockSystemAppsEnabled: Boolean = true
 
+    // --- TIMEOUT RELOCK PERIOD ---
+    var customRelockPeriodMinutes: Int = 0 // 0 means Immediate, otherwise relock after X minutes
+
     // --- FALLBACK PIN & ELITE MODE SECURITY ---
     var securePinCode: String = "1234" // Default PIN
     var isPinLockEnabled: Boolean = true
@@ -30,7 +34,8 @@ object LockSessionManager {
     
     // --- CUSTOM WRONG ATTEMPT AUDIO ALARMS ---
     var wrongAttemptSound: String = "AI Vocal Lockdown Prompt"
-    // Audio options: "Siren Alarm Threat Loop", "AI Vocal Lockdown Prompt", "Short Sci-Fi Beep Error", "Retro Arcade Buzzer", "Dramatic Nuclear Alert", "High-Frequency Sonic Sweep"
+    // Audio options: "Siren Alarm Threat Loop", "AI Vocal Lockdown Prompt", "Short Sci-Fi Beep Error", "Retro Arcade Buzzer", "Dramatic Nuclear Alert", "High-Frequency Sonic Sweep", "Imported Device Audio"
+    var importedAlarmAudioUri: String = ""
 
     // --- STEALTH launcher mask ---
     var appDisguiseIcon: String = "Default Shield"
@@ -69,18 +74,33 @@ object LockSessionManager {
     }
 
     fun isAppUnlocked(packageName: String): Boolean {
-        return unlockedPackages.contains(packageName)
+        val isPresent = unlockedPackages.contains(packageName)
+        if (!isPresent) return false
+        
+        if (customRelockPeriodMinutes > 0) {
+            val unlockTime = unlockedTimestamps[packageName] ?: return false
+            val elapsedMs = System.currentTimeMillis() - unlockTime
+            val maxMs = customRelockPeriodMinutes * 60 * 1000L
+            if (elapsedMs > maxMs) {
+                relockApp(packageName)
+                return false
+            }
+        }
+        return true
     }
 
     fun unlockApp(packageName: String) {
         unlockedPackages.add(packageName)
+        unlockedTimestamps[packageName] = System.currentTimeMillis()
     }
 
     fun relockApp(packageName: String) {
         unlockedPackages.remove(packageName)
+        unlockedTimestamps.remove(packageName)
     }
 
     fun clearAllSessions() {
         unlockedPackages.clear()
+        unlockedTimestamps.clear()
     }
 }

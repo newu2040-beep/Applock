@@ -65,6 +65,11 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executor
+import android.media.MediaPlayer
+import android.media.AudioTrack
+import android.media.AudioFormat
+import android.media.AudioManager
+import kotlinx.coroutines.Dispatchers
 
 class LockOverlayActivity : FragmentActivity() {
 
@@ -74,6 +79,7 @@ class LockOverlayActivity : FragmentActivity() {
     private var targetPackage: String = ""
     private var targetAppName: String = "App"
     private var tts: TextToSpeech? = null
+    private var mediaPlayer: MediaPlayer? = null
 
     private val systemKeyguardLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -307,8 +313,113 @@ class LockOverlayActivity : FragmentActivity() {
             }
         }
 
-        // 2. Trigger automatic background image capture and log inside app lock
+        // 2. Play alert alarm sounds in real time
+        playAlertSound()
+
+        // 3. Trigger automatic background image capture and log inside app lock
         triggerSilentSelfieCapture()
+    }
+
+    private fun playAlertSound() {
+        val selectedSound = LockSessionManager.wrongAttemptSound
+        val context = this
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                mediaPlayer?.let {
+                    if (it.isPlaying) {
+                        try { it.stop() } catch (ex: Exception) {}
+                    }
+                    try { it.release() } catch (ex: Exception) {}
+                }
+                mediaPlayer = null
+
+                if (selectedSound == "Imported Device Audio" && LockSessionManager.importedAlarmAudioUri.isNotEmpty()) {
+                    val uri = android.net.Uri.parse(LockSessionManager.importedAlarmAudioUri)
+                    mediaPlayer = MediaPlayer().apply {
+                        setDataSource(context, uri)
+                        prepare()
+                        isLooping = false
+                        start()
+                    }
+                } else {
+                    playProceduralSynthTone(selectedSound)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun playProceduralSynthTone(preset: String) {
+        val sampleRate = 44100
+        val durationSeconds = 1.2
+        val numSamples = (durationSeconds * sampleRate).toInt()
+        val sample = DoubleArray(numSamples)
+        val generatedSnd = ByteArray(2 * numSamples)
+
+        when {
+            preset.contains("Buzz", true) -> {
+                for (i in 0 until numSamples) {
+                    val freq = if ((i / 3000) % 2 == 0) 800.0 else 950.0
+                    sample[i] = Math.sin(2.0 * Math.PI * i * freq / sampleRate)
+                }
+            }
+            preset.contains("Pulse", true) -> {
+                for (i in 0 until numSamples) {
+                    val freq = 140.0 - (i.toDouble() / numSamples) * 60.0
+                    sample[i] = Math.sin(2.0 * Math.PI * i * freq / sampleRate) * if (i < numSamples / 2) 1.0 else 0.0
+                }
+            }
+            preset.contains("Siren", true) -> {
+                for (i in 0 until numSamples) {
+                    val t = i.toDouble() / sampleRate
+                    val freq = 450.0 + 250.0 * Math.sin(2.0 * Math.PI * 4.0 * t)
+                    sample[i] = Math.sin(2.0 * Math.PI * t * freq)
+                }
+            }
+            preset.contains("Quantum", true) || preset.contains("Warp", true) -> {
+                for (i in 0 until numSamples) {
+                    val t = i.toDouble() / sampleRate
+                    val freq = 1200.0 * (1.0 - t) * (1.0 + 0.15 * Math.sin(2.0 * Math.PI * 30.0 * t))
+                    sample[i] = Math.sin(2.0 * Math.PI * t * freq)
+                }
+            }
+            else -> {
+                for (i in 0 until numSamples) {
+                    val freq = 500.0
+                    sample[i] = Math.sin(2.0 * Math.PI * i * freq / sampleRate)
+                }
+            }
+        }
+
+        // Convert double samples to 16-bit PCM bytes
+        var idx = 0
+        for (dVal in sample) {
+            val valShort = (dVal * 32767).toInt().toShort()
+            generatedSnd[idx++] = (valShort.toInt() and 0x00ff).toByte()
+            generatedSnd[idx++] = ((valShort.toInt() and 0xff00) ushr 8).toByte()
+        }
+
+        val minBufferSize = AudioTrack.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+
+        try {
+            val audioTrack = AudioTrack(
+                AudioManager.STREAM_ALARM,
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                Math.max(generatedSnd.size, minBufferSize),
+                AudioTrack.MODE_STATIC
+            )
+            audioTrack.write(generatedSnd, 0, generatedSnd.size)
+            audioTrack.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun triggerSilentSelfieCapture() {
@@ -414,6 +525,10 @@ class LockOverlayActivity : FragmentActivity() {
         try {
             tts?.stop()
             tts?.shutdown()
+        } catch (e: Exception) {}
+        try {
+            mediaPlayer?.release()
+            mediaPlayer = null
         } catch (e: Exception) {}
     }
 
@@ -1769,6 +1884,103 @@ fun DynamicPresetBackground(
                             color = Color(0xFFFBBF24).copy(alpha = localShimmer * 0.6f),
                             radius = sparkleRadius,
                             center = androidx.compose.ui.geometry.Offset(floatX.toFloat(), floatY.toFloat())
+                        )
+                    }
+                }
+            }
+            "Aurora Borealis Dream" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "aurora")
+                val auroraTime by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(animation = tween(12000, easing = LinearEasing)),
+                    label = "auroraAnim"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF04020D))
+                    val path = Path()
+                    path.moveTo(0f, 0f)
+                    val steps = 40
+                    val wStep = size.width / steps
+                    for (i in 0..steps) {
+                        val currentX = i * wStep
+                        val progress = i.toFloat() / steps
+                        val wave1 = kotlin.math.sin(auroraTime + progress * 4f) * 45.dp.toPx()
+                        val wave2 = kotlin.math.cos(auroraTime * 1.5f - progress * 3f) * 30.dp.toPx()
+                        val waveY = size.height * 0.35f + wave1 + wave2
+                        path.lineTo(currentX, waveY)
+                    }
+                    path.lineTo(size.width, 0f)
+                    path.close()
+                    drawPath(
+                        path = path,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color(0x7F10B981), Color(0x3B22D3EE), Color.Transparent),
+                            startY = 0f,
+                            endY = size.height * 0.6f
+                        )
+                    )
+                }
+            }
+            "Liquid Lava Flow" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "lavaFlow")
+                val flowValue by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(animation = tween(10000, easing = LinearEasing)),
+                    label = "flowValue"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF140202))
+                    val b1X = center.x + kotlin.math.cos(flowValue) * 70.dp.toPx()
+                    val b1Y = center.y + kotlin.math.sin(flowValue * 1.2f) * 120.dp.toPx()
+                    val b2X = center.x - kotlin.math.sin(flowValue + 1f) * 85.dp.toPx()
+                    val b2Y = center.y + kotlin.math.cos(flowValue * 0.8f) * 150.dp.toPx()
+                    
+                    drawCircle(
+                        brush = Brush.radialGradient(colors = listOf(Color(0x3BEE4444), Color.Transparent), radius = 180.dp.toPx()),
+                        radius = 180.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(b1X, b1Y)
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(colors = listOf(Color(0x35F59E0B), Color.Transparent), radius = 190.dp.toPx()),
+                        radius = 190.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(b2X, b2Y)
+                    )
+                }
+            }
+            "Cosmic Dust Ring" -> {
+                val infiniteTransition = rememberInfiniteTransition(label = "cosmicRing")
+                val spinValue by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 360f,
+                    animationSpec = infiniteRepeatable(animation = tween(24000, easing = LinearEasing)),
+                    label = "spin"
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF02040E))
+                    drawCircle(
+                        color = Color(0x1A2563EB),
+                        radius = 160.dp.toPx(),
+                        center = center,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color(0x0E8B5CF6),
+                        radius = 210.dp.toPx(),
+                        center = center,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                    val rRad = Math.toRadians(spinValue.toDouble()).toFloat()
+                    for (i in 0 until 12) {
+                        val angle = rRad + (2f * Math.PI.toFloat() * i / 12f)
+                        val radius = 160.dp.toPx()
+                        val dotX = center.x + radius * kotlin.math.cos(angle)
+                        val dotY = center.y + radius * kotlin.math.sin(angle)
+                        drawCircle(
+                            color = Color(0xFF60A5FA).copy(alpha = 0.4f),
+                            radius = 3.dp.toPx(),
+                            center = androidx.compose.ui.geometry.Offset(dotX, dotY)
                         )
                     }
                 }

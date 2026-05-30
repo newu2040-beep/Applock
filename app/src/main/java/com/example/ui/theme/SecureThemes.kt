@@ -144,6 +144,36 @@ object SecureThemes {
             surfaceColor = Color(0x224D2C13),
             onSurfaceColor = Color(0xFFFFFBEB),
             accentColor = Color(0xFFFBBF24)
+        ),
+        AppThemeColors(
+            name = "Apple Liquid Glass",
+            primary = Color(0xFF0D9488),
+            secondary = Color(0xFF3B82F6),
+            backgroundStart = Color(0xFF030712),
+            backgroundEnd = Color(0xFF0F172A),
+            surfaceColor = Color(0x1A38BDF8),
+            onSurfaceColor = Color(0xFFF8FAFC),
+            accentColor = Color(0xFF38BDF8)
+        ),
+        AppThemeColors(
+            name = "Emerald Jade",
+            primary = Color(0xFF10B981),
+            secondary = Color(0xFFF59E0B),
+            backgroundStart = Color(0xFF022C22),
+            backgroundEnd = Color(0xFF064E3B),
+            surfaceColor = Color(0x2A10B981),
+            onSurfaceColor = Color(0xFFE6FDF5),
+            accentColor = Color(0xFF34D399)
+        ),
+        AppThemeColors(
+            name = "Amethyst Quartz",
+            primary = Color(0xFF8B5CF6),
+            secondary = Color(0xFFEC4899),
+            backgroundStart = Color(0xFF1E1B4B),
+            backgroundEnd = Color(0xFF311042),
+            surfaceColor = Color(0x2C8B5CF6),
+            onSurfaceColor = Color(0xFFF5F3FF),
+            accentColor = Color(0xFFA78BFA)
         )
     )
 

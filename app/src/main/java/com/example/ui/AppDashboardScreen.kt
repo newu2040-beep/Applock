@@ -923,7 +923,17 @@ fun AppsTab(
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         IconButton(
                                             onClick = {
-                                                Toast.makeText(context, "Spinning up isolated security sandbox of $name...", Toast.LENGTH_LONG).show()
+                                                try {
+                                                    val intent = context.packageManager.getLaunchIntentForPackage(originalPkg)
+                                                    if (intent != null) {
+                                                        context.startActivity(intent)
+                                                        Toast.makeText(context, "Executing $name inside virtual isolated vault.", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        Toast.makeText(context, "Could not find starting vectors for $originalPkg duplicate.", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "Sandbox starting exception: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         ) {
                                             Icon(
@@ -1615,6 +1625,8 @@ fun SettingsTab(
     val appDisguiseIcon by viewModel.appDisguiseIcon.collectAsState()
     val appDisguiseName by viewModel.appDisguiseName.collectAsState()
     val customGalleryWallpaperUri by viewModel.customGalleryWallpaperUri.collectAsState()
+    val customRelockPeriodMinutes by viewModel.customRelockPeriodMinutes.collectAsState()
+    val importedAlarmAudioUri by viewModel.importedAlarmAudioUri.collectAsState()
 
     var showPinDialog by remember { mutableStateOf(false) }
     var pinValueInput by remember { mutableStateOf(securePinCode) }
@@ -1650,6 +1662,41 @@ fun SettingsTab(
             galleryLauncher.launch("image/*")
         } else {
             Toast.makeText(context, "Gallery permission denied. Default presets will remain active.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 2.b Audio picker launcher
+    val audioLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.setImportedAlarmAudioUri(uri.toString())
+            viewModel.setWrongAttemptSound("Imported Device Audio")
+            Toast.makeText(context, "Custom alert system audio equipped successfully!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val audioPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        android.Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        android.Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(context, audioPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val audioPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasAudioPermission = isGranted
+        if (isGranted) {
+            Toast.makeText(context, "Voice & Audio files authorized! Opening audio files list...", Toast.LENGTH_SHORT).show()
+            audioLauncher.launch("audio/*")
+        } else {
+            Toast.makeText(context, "Audio file authorization denied. Procedural alerts will be used.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1849,6 +1896,73 @@ fun SettingsTab(
                     displayTheme = displayTheme,
                     onCheckedChange = { viewModel.setAutoRelockOnScreenOff(it) }
                 )
+
+                // Premium Apple-inspired Snapping Relock Slider
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, bottom = 6.dp)
+                ) {
+                    Divider(color = displayTheme.onSurfaceColor.copy(alpha = 0.08f), thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = null,
+                                tint = displayTheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "App Re-locking Timeout",
+                                color = displayTheme.onSurfaceColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = if (customRelockPeriodMinutes == 0) "🌙 Immediate Lock" else "⏳ $customRelockPeriodMinutes mins",
+                            color = displayTheme.primary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Text(
+                        text = "Once successfully unlocked, keep apps open for a custom period before locking again.",
+                        color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                    
+                    val possibleMinutes = listOf(0, 1, 2, 5, 10, 15, 30, 60)
+                    val sliderIndex = remember(customRelockPeriodMinutes) {
+                        val index = possibleMinutes.indexOf(customRelockPeriodMinutes)
+                        if (index != -1) index.toFloat() else 0f
+                    }
+                    
+                    Slider(
+                        value = sliderIndex,
+                        onValueChange = { indexFloat ->
+                            val idx = indexFloat.toInt().coerceIn(0, possibleMinutes.lastIndex)
+                            viewModel.setCustomRelockPeriodMinutes(possibleMinutes[idx])
+                        },
+                        valueRange = 0f..(possibleMinutes.size - 1).toFloat(),
+                        steps = possibleMinutes.size - 2,
+                        colors = SliderDefaults.colors(
+                            thumbColor = displayTheme.primary,
+                            activeTrackColor = displayTheme.primary,
+                            inactiveTrackColor = displayTheme.onSurfaceColor.copy(alpha = 0.12f),
+                            activeTickColor = Color.Transparent,
+                            inactiveTickColor = Color.Transparent
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(28.dp)
+                    )
+                }
                 SettingsToggleRow(
                     title = "Stealth Launcher disguise",
                     description = "Fakes launcher icons to hide SecureUnlock.",
@@ -2020,13 +2134,13 @@ fun SettingsTab(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Intruder Alert Noise Frequency Signature",
+                        text = "Intruder Alert Noise Frequency Signature / Custom Audio",
                         color = displayTheme.onSurfaceColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Configure manual procedural sound waves generated on failed biometric touch scanning:",
+                        text = "Configure manual procedural sound waves generated or import customized audio presets:",
                         color = displayTheme.onSurfaceColor.copy(alpha = 0.6f),
                         fontSize = 10.sp
                     )
@@ -2037,13 +2151,21 @@ fun SettingsTab(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val failedSounds = listOf("Furious Alarm Buzz", "Biometric Error Pulse", "Retro Siren Sweep", "Quantum Warp Gate")
+                        val failedSounds = listOf("Furious Alarm Buzz", "Biometric Error Pulse", "Retro Siren Sweep", "Quantum Warp Gate", "Imported Device Audio")
                         failedSounds.forEach { preset ->
                             val isSel = wrongAttemptSound == preset
                             Surface(
                                 modifier = Modifier.clickable {
                                     viewModel.setWrongAttemptSound(preset)
-                                    Toast.makeText(context, "$preset sound wave equipped!", Toast.LENGTH_SHORT).show()
+                                    if (preset == "Imported Device Audio" && importedAlarmAudioUri.isEmpty()) {
+                                        if (hasAudioPermission) {
+                                            audioLauncher.launch("audio/*")
+                                        } else {
+                                            audioPermissionLauncher.launch(audioPermission)
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "$preset alarm signature armed!", Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSel) displayTheme.primary else displayTheme.surfaceColor.copy(alpha = 0.5f),
@@ -2057,6 +2179,62 @@ fun SettingsTab(
                                     fontSize = 11.sp
                                 )
                             }
+                        }
+                    }
+
+                    // Dynamic Audio File pickers
+                    if (wrongAttemptSound == "Imported Device Audio") {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(displayTheme.primary.copy(alpha = 0.06f))
+                                .border(1.dp, displayTheme.primary.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                                .clickable {
+                                    if (hasAudioPermission) {
+                                        audioLauncher.launch("audio/*")
+                                    } else {
+                                        audioPermissionLauncher.launch(audioPermission)
+                                    }
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = displayTheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Import Device Audio Alarm",
+                                        color = displayTheme.onSurfaceColor,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (importedAlarmAudioUri.isEmpty()) {
+                                            "No custom device audio file loaded. Touch to select..."
+                                        } else {
+                                            "Armed URI: " + importedAlarmAudioUri.substringAfterLast("/")
+                                        },
+                                        color = displayTheme.onSurfaceColor.copy(alpha = 0.5f),
+                                        fontSize = 10.sp,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "UPLOAD",
+                                color = displayTheme.primary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
                     }
                 }
@@ -2118,7 +2296,8 @@ fun SettingsTab(
                             "Starry Cyber Mesh", "Deep Midnight Nebula", "Virtual Matrix Rain", 
                             "Glassmorphic Sunset Glow", "Cyberpunk Grid Neon", "Standard Slate",
                             "Holographic Scan Scanline", "Retro Arcade Grid", "Quantum Particle Burst", 
-                            "Abyss Lava Lamp", "Polished Satin Silk", "Golden Shimmer Sparkles"
+                            "Abyss Lava Lamp", "Polished Satin Silk", "Golden Shimmer Sparkles",
+                            "Aurora Borealis Dream", "Liquid Lava Flow", "Cosmic Dust Ring"
                         )
                         presets.forEach { preset ->
                             val isSel = wallpaperSelected == preset

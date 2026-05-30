@@ -63,6 +63,8 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
     val appDisguiseName = MutableStateFlow(LockSessionManager.appDisguiseName)
     val clonedAppsList = MutableStateFlow(LockSessionManager.getClonedApps().toSet())
     val customGalleryWallpaperUri = MutableStateFlow(LockSessionManager.customGalleryWallpaperUri)
+    val customRelockPeriodMinutes = MutableStateFlow(LockSessionManager.customRelockPeriodMinutes)
+    val importedAlarmAudioUri = MutableStateFlow(LockSessionManager.importedAlarmAudioUri)
 
     init {
         val dao = AppDatabase.getDatabase(application).dao
@@ -342,5 +344,15 @@ class AppLockViewModel(application: Application) : AndroidViewModel(application)
     fun setSystemLockEnabled(enabled: Boolean) {
         LockSessionManager.isSystemLockEnabled = enabled
         isSystemLockEnabled.value = enabled
+    }
+
+    fun setCustomRelockPeriodMinutes(minutes: Int) {
+        LockSessionManager.customRelockPeriodMinutes = minutes
+        customRelockPeriodMinutes.value = minutes
+    }
+
+    fun setImportedAlarmAudioUri(uri: String) {
+        LockSessionManager.importedAlarmAudioUri = uri
+        importedAlarmAudioUri.value = uri
     }
 }
